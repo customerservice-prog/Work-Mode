@@ -35,6 +35,21 @@ async function initializeRemote() {
     const mode = await response.json();
     if (!mode.cloud) return;
     document.body.classList.add('cloud-mode');
+    try {
+      const response=await fetch('/api/cloud/readiness',{credentials:'same-origin'});
+      if (response.ok) {
+        const state=await response.json();
+        const missing=[];
+        if (!state.aiConfigured) missing.push('AI connection');
+        if (!state.dataDirectoryConfigured || !state.dataDirectoryWritable) missing.push('persistent storage configuration');
+        if (!state.browserInstalled) missing.push('browser installation');
+        $r('cloudStatus').textContent = missing.length
+          ? 'Workspace setup incomplete: ' + missing.join(', ') + '.'
+          : 'Basic workspace checks passed. Browser security and hosting availability still need real-world verification.';
+      }
+    } catch {
+      $r('cloudStatus').textContent='Could not check the private workspace configuration.';
+    }
     $r('remoteControls').hidden = false;
     $r('cloudLogout').hidden = false;
     $r('installHelp').hidden = false;

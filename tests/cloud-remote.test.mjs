@@ -51,6 +51,7 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     assert.ok(ready,'Cloud server did not start: '+errors);
     assert.equal((await request('/api/mode')).status,401);
     assert.equal((await request('/api/screenshot')).status,401);
+    assert.equal((await request('/api/cloud/readiness')).status,401);
     assert.equal((await request('/api/events')).status,401);
     const health=await request('/api/health');
     assert.equal(health.status,200);
@@ -62,6 +63,12 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     const cookie=login.headers.get('set-cookie').split(';')[0];
     const mode=await (await request('/api/mode','GET',undefined,cookie)).json();
     assert.equal(mode.cloud,true);
+    const readiness=await (await request('/api/cloud/readiness','GET',undefined,cookie)).json();
+    assert.equal(readiness.hosted,true);
+    assert.equal(readiness.aiConfigured,false);
+    assert.equal(readiness.dataDirectoryConfigured,true);
+    assert.equal(readiness.dataDirectoryWritable,true);
+    assert.equal(readiness.browserInstalled,true);
     const bad=await request('/api/remote/navigate','POST',{url:'http://127.0.0.1:1/private'},cookie);
     assert.equal(bad.status,400);
     const navigation=await request('/api/remote/navigate','POST',

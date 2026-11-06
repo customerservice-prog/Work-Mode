@@ -670,6 +670,36 @@ app.post('/api/remote/scroll', async (req,res) => {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Work-Mode', local: !CLOUD_MODE }));
 app.get('/api/mode', (_req,res) => res.json({ cloud: CLOUD_MODE, name: 'Work-Mode' }));
+app.get('/api/cloud/readiness', async (_req,res) => {
+  if (!CLOUD_MODE) return res.status(404).json({ error:'Not hosted mode' });
+  try {
+    const settings=await readSettings();
+    const dataDirectoryConfigured=Boolean(process.env.WORKMODE_DATA_DIR);
+    let dataDirectoryWritable=false;
+    let browserInstalled=false;
+    try {
+      await fs.mkdir(DATA_ROOT,{recursive:true,mode:0o700});
+      const probe=path.join(DATA_ROOT,'.workmode-storage-probe');
+      await fs.writeFile(probe,'test',{mode:0o600});
+      await fs.unlink(probe);
+      dataDirectoryWritable=true;
+    } catch {}
+    try {
+      await fs.access(chromium.executablePath());
+      browserInstalled=true;
+    } catch {}
+    res.set('Cache-Control','no-store').json({
+      hosted:true,
+      aiConfigured:Boolean(settings.apiKey),
+      dataDirectoryConfigured,
+      dataDirectoryWritable,
+      browserInstalled,
+      warning:'These checks do not prove that storage is persistent, the cloud bill is current, or Chromium isolation is secure.'
+    });
+  } catch {
+    res.status(500).json({error:'Cannot check hosted configuration'});
+  }
+});
 app.get('/api/status', (_req, res) => res.json(exposeState()));
 app.get('/api/screenshot', (_req, res) => {
   if (!latestImage) return res.status(404).end();
