@@ -24,6 +24,15 @@ let stopped = false;
 let snapshotRevision = 0;
 const boundPages = new WeakSet();
 const eventClients = new Set();
+function allowedIntegrationTestUrl(raw) {
+  if (process.env.NODE_ENV !== 'test' || !process.env.WORKMODE_TEST_ORIGIN) return false;
+  try { return new URL(raw).origin === process.env.WORKMODE_TEST_ORIGIN; }
+  catch { return false; }
+}
+async function validateBrowserUrl(raw) {
+  if (allowedIntegrationTestUrl(raw)) return String(raw);
+  return assertPublicNavigation(raw);
+}
 
 app.disable('x-powered-by');
 app.use((req, res, next) => {
@@ -65,7 +74,7 @@ async function ensureBrowser() {
   if (!context) {
     await fs.mkdir(DATA_ROOT, { recursive: true });
     context = await chromium.launchPersistentContext(BROWSER_DIR, {
-      headless: false,
+      headless: process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1',
       viewport: { width: 1200, height: 820 },
       acceptDownloads: false
     });
@@ -74,6 +83,10 @@ async function ensureBrowser() {
       try {
         const requested = route.request();
         const target = requested.url();
+        if (allowedIntegrationTestUrl(target)) {
+          await route.continue();
+          return;
+        }
         const protocol = new URL(target).protocol;
         if (!requested.isNavigationRequest() && ['data:', 'blob:'].includes(protocol)) {
           await route.continue();
@@ -211,7 +224,7 @@ async function executeTool(name, args) {
     return { ok: true, url: activePage.url() };
   }
   if (name === 'open_tab') {
-    const target = await assertPublicNavigation(args.url);
+    const target = await validateBrowserUrl(args.url);
     const newPage = await context.newPage();
     attachPage(newPage);
     await newPage.goto(target, { waitUntil: 'domcontentloaded', timeout: 35000 });
@@ -272,7 +285,7 @@ async function executeTool(name, args) {
     return { verified, kind, expected, observedExcerpt: actual.slice(0, 700), url: page.url() };
   }
   if (name === 'navigate') {
-    const url = await assertPublicNavigation(args.url);
+    const url = await validateBrowserUrl(args.url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 });
     log('Navigated to ' + page.url());
     await refreshImage();
@@ -359,7 +372,12 @@ async function runTask(task) {
   try {
     if (!process.env.OPENAI_API_KEY?.trim()) throw new Error('OPENAI_API_KEY missing. Open the local .env file and add your API key.');
     await ensureBrowser();
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 70000, maxRetries: 1 });
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: 70000, maxRetries: 1,
+      ...(process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_AI_BASE_URL
+        ? { baseURL: process.env.WORKMODE_TEST_AI_BASE_URL } : {})
+    });
     const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
     let response = await client.responses.create({
       model, tools: browserTools, parallel_tool_calls: false,
