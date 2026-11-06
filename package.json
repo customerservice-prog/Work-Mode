@@ -52,7 +52,7 @@
           ]
         }
       ],
-      "icon": "desktop/assets/work-mode.ico"
+      "icon": "desktop/assets/work-mode.svg"
     },
     "nsis": {
       "oneClick": true,
