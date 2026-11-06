@@ -8,6 +8,7 @@ import { chromium } from 'playwright';
 import OpenAI from 'openai';
 import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretField, assertLocalRequest, redactForLog } from './lib/safety.js';
 import { recordTask, listHistory, historyEntry } from './lib/history.js';
+import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
 
 const app = express();
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
@@ -372,19 +373,20 @@ async function runTask(task) {
   stopped = false;
   notify('status', { phase: SESSION.phase, task });
   try {
-    const useLocalAI = String(process.env.AI_PROVIDER || '').toLowerCase() === 'ollama';
-    if (!useLocalAI && !process.env.OPENAI_API_KEY?.trim()) {
+    const settings = await readSettings();
+    const useLocalAI = settings.provider === 'ollama';
+    if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
     }
     await ensureBrowser();
     const client = new OpenAI({
-      apiKey: useLocalAI ? 'ollama' : process.env.OPENAI_API_KEY,
+      apiKey: useLocalAI ? 'ollama' : settings.apiKey,
       timeout: 70000, maxRetries: 1,
       ...(useLocalAI ? { baseURL: 'http://127.0.0.1:11434/v1' } : {}),
       ...(process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_AI_BASE_URL
         ? { baseURL: process.env.WORKMODE_TEST_AI_BASE_URL } : {})
     });
-    const model = useLocalAI ? (process.env.OLLAMA_MODEL || 'qwen3:8b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
+    const model = useLocalAI ? settings.ollamaModel : settings.openaiModel;
     const transcript = [{ role: 'user', content: task }];
     const modelOptions = useLocalAI ? {} : { parallel_tool_calls: false };
     let response = await client.responses.create({
@@ -449,6 +451,15 @@ async function runTask(task) {
 }
 
 
+app.get('/api/settings', async (_req, res) => {
+  try { res.json(await getPublicSettings()); }
+  catch (err) { res.status(500).json({ error: String(err.message || err) }); }
+});
+app.post('/api/settings', async (req, res) => {
+  if (SESSION.busy) return res.status(409).json({ error: 'Finish the running task before changing AI settings' });
+  try { res.json(await saveSettings(req.body || {})); }
+  catch (err) { res.status(400).json({ error: String(err.message || err) }); }
+});
 app.get('/api/history', async (_req, res) => {
   try { res.json({ history: await listHistory() }); }
   catch (err) { res.status(500).json({ error: 'Could not load task history' }); }

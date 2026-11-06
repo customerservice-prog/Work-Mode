@@ -60,6 +60,16 @@ textarea:focus{border-color:#9db9e4}
 .historyItem{display:block;text-align:left;background:transparent;width:100%;font-size:12px;white-space:normal;border:0;border-bottom:1px solid #343746;border-radius:0;padding:8px 2px;line-height:1.5}
 .historyItem:hover{background:#292d39}.historyItem span{color:#8e9aaf;font-size:11px;display:block}
 @media(max-width:1050px){.recent{display:none}}
+
+dialog.settings{background:#1b1e2a;color:#eef2fb;border:1px solid #4a5165;border-radius:18px;padding:24px;width:min(520px,calc(100vw - 30px));box-shadow:0 24px 100px #000a}
+dialog.settings::backdrop{background:#05070cbd}
+.settings h2{margin:0 0 10px;font-size:22px}
+.settings p,.settings label{font-size:13px;color:#adb8cb;line-height:1.6}
+.settings label{display:block;font-weight:700;margin:13px 0 6px}
+.settings input,.settings select{width:100%;background:#11131d;color:#f3f7ff;border:1px solid #4c5468;border-radius:10px;padding:10px 12px}
+.settings-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+.settings-help{background:#242b39;border:1px solid #3b4860;padding:12px;border-radius:12px;font-size:12px;color:#b9c5d8;line-height:1.55;margin-top:14px}
+.settings-help a{color:#b9ddff}
 </style>
 </head>
 <body>
@@ -74,7 +84,7 @@ textarea:focus{border-color:#9db9e4}
 <main class="main">
  <div class="top">
   <div><h1>Tell it what to do.</h1><p>Give a task, watch the browser, and review the outcome.</p></div>
-  <div class="topright"><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
+  <div class="topright"><button id="settingsButton" class="ghost">AI Settings</button><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
  </div>
  <div class="columns">
   <section class="panel">
@@ -102,7 +112,34 @@ textarea:focus{border-color:#9db9e4}
  <p class="notice">Early local MVP. Supervise browser actions. Do not paste API keys or passwords into chat. OpenAI API usage has separate costs.</p>
 </main>
 </div>
+<dialog id="settingsDialog" class="settings">
+  <form id="settingsForm">
+    <h2>Choose your AI</h2>
+    <p>Work-Mode can use AI running on your PC for no per-message model fee, or an OpenAI API key for a more capable paid option. You can change this later.</p>
+    <label for="aiProvider">AI mode</label>
+    <select id="aiProvider">
+      <option value="ollama">Free local AI — Ollama (requires installation)</option>
+      <option value="openai">OpenAI API — metered usage</option>
+    </select>
+    <div id="localFields">
+      <label for="ollamaModel">Local model</label>
+      <input id="ollamaModel" spellcheck="false" value="qwen3:8b">
+      <div class="settings-help">First install <a href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer">Ollama for Windows</a>. Then open Windows Terminal and run <code>ollama pull qwen3:8b</code>. A multi-GB model download and sufficient computer memory are required. Keep Ollama running.</div>
+    </div>
+    <div id="apiFields">
+      <label for="apiModel">OpenAI model</label>
+      <input id="apiModel" spellcheck="false" value="gpt-4.1-mini">
+      <label for="apiKey">API key</label>
+      <input id="apiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste your API key here">
+      <p id="keyNote">A saved key is stored only on this computer, never in the GitHub repository.</p>
+      <div class="settings-help">API costs are billed separately from ChatGPT. Set your spending limits in your API account. Never put the key in task chat.</div>
+    </div>
+    <p id="settingsMessage" role="status"></p>
+    <div class="settings-actions"><button type="button" id="settingsClose">Cancel</button><button type="submit" class="primary">Save settings</button></div>
+  </form>
+</dialog>
 <script src="/app.js" defer></script>
 <script src="/extra.js" defer></script>
+<script src="/settings.js" defer></script>
 </body>
 </html>

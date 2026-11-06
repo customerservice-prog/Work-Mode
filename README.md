@@ -13,7 +13,7 @@ Open a chat page on your Windows computer, describe what you want done on a webs
 1. Install [Node.js 22+](https://nodejs.org/) if you don't have it.
 2. Download this repository from GitHub (Code -> Download ZIP), then extract it.
 3. Double-click `setup-windows.cmd` and follow the prompts. This installs dependencies and creates your local `.env` file.
-4. Choose an AI mode in the local `.env` file: **OpenAI API** (usually more capable, but metered) or **Ollama** (runs a local model, no per-request API charges). See below.
+4. Start Work-Mode, click **AI Settings**, and choose your AI mode. You do **not** have to edit code or configuration files. OpenAI API mode is billed separately; Ollama local mode does not have per-message model API charges.
 5. Double-click `start-windows.cmd`, open **http://127.0.0.1:3168**, and choose **Open Browser**. Sign in yourself to sites in that window, then give the agent a task.
 
 The agent only runs while the local app is open. Keep the command window open.
@@ -31,9 +31,9 @@ Local software and Playwright are free. **OpenAI API mode** has separate usage c
 
 ### Choose your AI provider
 
-**Option A — paid API mode (more reliable for complex tasks):** In your local `.env`, set `AI_PROVIDER=openai` and `OPENAI_API_KEY=your_key`. Set your own API spending limits in the OpenAI API dashboard.
+**Option A — paid API mode (more reliable for complex tasks):** In Work-Mode, click **AI Settings**, choose OpenAI API, and enter a key. Set your own API spending limits in the OpenAI API dashboard.
 
-**Option B — local Ollama (no per-message model API fee):** Install [Ollama](https://ollama.com/download/windows), open Windows Terminal once and run `ollama pull qwen3:8b` (a multi-GB download; a PC with sufficient memory is required). Then set `AI_PROVIDER=ollama` in `.env`. You can leave `OPENAI_API_KEY` empty; set `OLLAMA_MODEL=qwen3:8b`. Ollama must be running when you use Work-Mode.
+**Option B — local Ollama (no per-message model API fee):** Install [Ollama](https://ollama.com/download/windows), open Windows Terminal once and run `ollama pull qwen3:8b` (a multi-GB download; a PC with sufficient memory is required). Then open **AI Settings** in Work-Mode, select Free local AI, and keep model `qwen3:8b`. No OpenAI API key is needed. Ollama must be running when you use Work-Mode.
 
 Ollama's compatible Responses endpoint does not support `previous_response_id`; Work-Mode instead carries the tool calls forward explicitly in local mode. Tool-calling quality depends on the installed model, so some website tasks may not work well in local mode. Never consider an unverified task completed.
 

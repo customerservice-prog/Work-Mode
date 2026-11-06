@@ -17,13 +17,10 @@ if errorlevel 1 goto :failed
 if not exist .env (
   copy .env.example .env >nul
   echo.
-  echo Your local .env file has been created.
-  echo Add your OPENAI_API_KEY on the first line, after the = sign.
-  echo Do not share the key or upload this file to GitHub.
-  notepad .env
+  echo Local setup completed. You can choose your AI in the app itself.
 )
 echo.
-echo Setup finished. Double-click start-windows.cmd next.
+echo Setup finished. Double-click start-windows.cmd, then click AI Settings.
 pause
 exit /b 0
 :failed
