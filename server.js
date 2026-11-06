@@ -170,11 +170,17 @@ async function readPage() {
       el.setAttribute('data-workmode-snapshot', String(revision));
       const label = (el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || el.getAttribute('title') || '').trim();
       const rawType = (el.getAttribute('type') || '').toLowerCase();
+      // Fields can be type=text while holding an OTP, access key, or payment
+      // credential. Never return their current values to the AI model.
+      const sensitive = /\b(pass(word|code)?|one.?time|otp|verification|2fa|mfa|security.?code|credit.?card|debit.?card|card.?number|cvc|cvv|routing.?number|account.?number|social.?security|ssn|api.?key|access.?token|auth.?token|secret|private.?key)\b/i.test([
+        rawType, el.getAttribute('name'), el.getAttribute('id'),
+        el.getAttribute('autocomplete'), label, el.getAttribute('placeholder')
+      ].filter(Boolean).join(' '));
       controls.push({
         id, tag: el.tagName.toLowerCase(), type: rawType,
         label: label.slice(0, 150),
         href: el.tagName.toLowerCase() === 'a' ? (el.href || '').slice(0, 250) : undefined,
-        value: ['password', 'hidden'].includes(rawType) ? '[redacted]' : String(el.value || '').slice(0, 90)
+        value: sensitive || ['password', 'hidden'].includes(rawType) ? '[redacted]' : String(el.value || '').slice(0, 90)
       });
       if (controls.length >= 120) break;
     }
@@ -331,7 +337,9 @@ async function executeTool(name, args) {
     const element = await getElement(args.id);
     const meta = await element.evaluate(el => ({
       tag: el.tagName.toLowerCase(),
-      label: (el.getAttribute('aria-label') || el.innerText || el.getAttribute('value') || el.getAttribute('title') || '').trim().slice(0, 160),
+      label: (el.getAttribute('aria-label') || el.innerText ||
+        (el.tagName.toLowerCase() === 'button' ? el.getAttribute('value') : '') ||
+        el.getAttribute('title') || '').trim().slice(0, 160),
       type: (el.getAttribute('type') || '').toLowerCase(),
       title: el.getAttribute('title') || '',
       formText: (el.closest('form')?.innerText || '').slice(0, 220),
@@ -371,12 +379,16 @@ async function executeTool(name, args) {
     return { ok: true, direction: args.direction };
   }
   if (name === 'inspect_visual') {
-    const image = await page.screenshot({ type: 'jpeg', quality: 62, timeout: 15000 });
-    latestImage = image;
-    SESSION.imageVersion++;
-    notify('image', { version: SESSION.imageVersion, url: page.url() });
-    log('Inspected browser screenshot');
-    return { result: { ok: true, screenshotProvidedToModel: true, url: page.url() }, image };
+    // Never transmit values that the owner entered into form fields.
+    // The owner sees a separate, unmasked browser preview via refreshImage.
+    const maskFields = page.locator('input, textarea, select, [contenteditable="true"]');
+    const image = await page.screenshot({
+      type: 'jpeg', quality: 62, timeout: 15000,
+      mask: [maskFields], maskColor: '#171c28'
+    });
+    await refreshImage();
+    log('Inspected browser screenshot with form fields masked from AI');
+    return { result: { ok: true, screenshotProvidedToModel: true, formValuesMasked: true, url: page.url() }, image };
   }
   throw new Error('Unknown tool');
 }
