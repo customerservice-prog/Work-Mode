@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Work-Mode — Your browser assistant</title>
+<style>
+:root{font-family:Inter,Segoe UI,Arial,sans-serif;color:#e9eaf0;background:#111218;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}button,textarea{font:inherit}
+button{cursor:pointer;border:1px solid #3a3d4b;background:#262936;color:#f5f5fa;border-radius:11px;padding:10px 15px}
+button:hover{background:#353849}button:disabled{cursor:wait;opacity:.5}
+button.primary{background:#d9edff;color:#16213b;border-color:#d9edff;font-weight:700}button.primary:hover{background:#badfff}
+button.danger{background:#492326;border-color:#7d3539}button.ghost{background:transparent}
+.shell{min-height:100vh;display:grid;grid-template-columns:290px minmax(0,1fr)}
+.side{background:#171922;border-right:1px solid #30323c;padding:26px 20px;display:flex;flex-direction:column;gap:24px}
+.brand{display:flex;align-items:center;gap:12px;font-size:22px;font-weight:750;letter-spacing:-.6px}
+.brandmark{display:grid;place-items:center;background:#c8e4ff;color:#18213a;width:41px;height:41px;border-radius:13px;font-weight:900}
+.kicker{color:#a4aabd;font-size:12px;letter-spacing:1.2px;text-transform:uppercase;font-weight:700}
+.hint{color:#adb1c0;font-size:13px;line-height:1.65}
+.side .smallbox{border:1px solid #343746;border-radius:14px;padding:14px;line-height:1.55}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#7b8498;margin-right:7px}
+.dot.running{background:#e4bd6f}.dot.done{background:#88d6aa}.dot.error{background:#ff8d87}
+.main{padding:24px 30px 36px;min-width:0}
+.top{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:20px}
+.top h1{font-size:27px;letter-spacing:-.6px;margin:0}
+.top p{color:#aeb3c3;margin:7px 0 0;font-size:14px}
+.topright{display:flex;gap:9px;align-items:center}
+.columns{display:grid;grid-template-columns:minmax(300px,.9fr) minmax(360px,1.1fr);gap:20px;min-height:calc(100vh - 135px)}
+.panel{background:#1a1c26;border:1px solid #303340;border-radius:19px;overflow:hidden;display:flex;flex-direction:column;min-height:430px}
+.paneltitle{font-size:13px;letter-spacing:.3px;color:#c5cad8;font-weight:700;padding:16px 18px;border-bottom:1px solid #313442}
+.chat{padding:22px;display:flex;flex:1;flex-direction:column;gap:14px}
+.bubble{font-size:14px;line-height:1.65;border-radius:16px;padding:16px 18px;white-space:pre-wrap;overflow-wrap:anywhere}
+.bubble.user{background:#2d3445;align-self:flex-end;max-width:94%}
+.bubble.ai{background:#252734;border:1px solid #373946}
+.placeholder{color:#bcc3d6;font-size:16px;line-height:1.65;margin-top:8px}
+.ideas{font-size:13px;border-left:2px solid #7e9bc9;padding:8px 12px;color:#b0bcd5;line-height:1.7}
+.compose{padding:16px;border-top:1px solid #313442}
+textarea{resize:vertical;width:100%;min-height:90px;max-height:220px;border:1px solid #44475a;background:#141620;color:#fafafa;border-radius:12px;padding:13px;outline:none;line-height:1.5}
+textarea:focus{border-color:#9db9e4}
+.composefoot{display:flex;align-items:center;justify-content:space-between;margin-top:9px;gap:10px}
+.composefoot span{font-size:11px;color:#989fb3}
+.preview{position:relative;min-height:330px;display:grid;place-items:center;background:repeating-linear-gradient(45deg,#1c1f2a,#1c1f2a 12px,#1a1d27 12px,#1a1d27 24px)}
+.preview img{width:100%;max-height:510px;object-fit:contain;object-position:top center;display:none}
+.preview.empty p{color:#9ea6bb;text-align:center;max-width:240px;font-size:14px;line-height:1.6}
+.urlbar{color:#9cb4d5;font-size:12px;padding:12px 18px;border-top:1px solid #313442;overflow-wrap:anywhere}
+.timeline{overflow-y:auto;max-height:250px;min-height:140px;padding:15px 18px;font-size:12px;line-height:1.55;color:#bac3d5}
+.item{padding:6px 0;border-bottom:1px solid #292e3b}
+.time{color:#778297;margin-right:8px}
+.approval{margin:0 16px 16px;padding:16px;border:1px solid #e1ac68;border-radius:14px;background:#2c271f;display:none}
+.approval h3{margin:0 0 8px;font-size:15px;color:#ffe0ab}
+.approval p{font-size:13px;color:#e9d5af;overflow-wrap:anywhere}
+.approval .buttons{display:flex;gap:9px}
+.notice{font-size:11px;color:#999eae;padding:0 3px}
+@media(max-width:1050px){.shell{grid-template-columns:1fr}.side{border-right:0;border-bottom:1px solid #30323c;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:15px 20px}.side .smallbox,.side .kicker,.side .hint{display:none}.columns{grid-template-columns:1fr;min-height:0}.main{padding:20px}}
+@media(max-width:600px){.top{flex-direction:column;align-items:flex-start}.top h1{font-size:23px}.columns{gap:15px}.panel{min-height:350px}.chat{padding:15px}.main{padding:14px}}
+</style>
+</head>
+<body>
+<div class="shell">
+<aside class="side">
+  <div class="brand"><span class="brandmark">W</span><span>Work-Mode</span></div>
+  <div class="kicker">Your local assistant</div>
+  <div class="smallbox"><span class="dot" id="statusDot"></span><strong id="stateLabel">Checking...</strong><div class="hint" id="stateDetails">Connect your own browser to begin.</div></div>
+  <p class="hint">Your browser stays on your computer. You approve sensitive actions before they happen. This uses the OpenAI API, not Work credits.</p>
+</aside>
+<main class="main">
+ <div class="top">
+  <div><h1>Tell it what to do.</h1><p>Give a task, watch the browser, and review the outcome.</p></div>
+  <div class="topright"><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
+ </div>
+ <div class="columns">
+  <section class="panel">
+   <div class="paneltitle">Conversation</div>
+   <div class="chat" id="chat">
+    <div class="placeholder" id="placeholder">What would you like your assistant to do?</div>
+    <div class="ideas" id="ideas">Example: Open my company website, check whether the promotion is visible on mobile, and tell me exactly what you verified.<br>For logged-in sites, sign into the visible automation browser once yourself.</div>
+   </div>
+   <div class="compose">
+    <label for="taskInput" class="notice">Your instruction</label>
+    <textarea id="taskInput" maxlength="3000" placeholder="Open a website, inspect it, make a change, and verify the result..."></textarea>
+    <div class="composefoot"><span>Enter sends · Shift+Enter adds a line</span><button class="primary" id="runTask">Run task</button></div>
+   </div>
+  </section>
+  <section class="panel">
+   <div class="paneltitle">Live browser preview <span style="font-weight:400;color:#8895ab">· visible local window</span></div>
+   <div class="preview empty" id="preview"><p id="emptyPreview">Open Browser to launch your automation browser and sign in if needed.</p><img id="screen" alt="Most recent Work-Mode browser screenshot"></div>
+   <div class="urlbar" id="browserUrl">No browser page yet</div>
+   <div class="paneltitle">Activity &amp; verification</div>
+   <div class="timeline" id="timeline"><div class="item">No actions yet.</div></div>
+   <div class="approval" id="approval"><h3>Approval required</h3><p id="approvalText"></p><div class="buttons"><button class="primary" id="approve">Approve this action</button><button id="deny">Deny</button></div></div>
+  </section>
+ </div>
+ <p class="notice">Early local MVP. Supervise browser actions. Do not paste API keys or passwords into chat. OpenAI API usage has separate costs.</p>
+</main>
+</div>
+<script src="/app.js" defer></script>
+</body>
+</html>
