@@ -31,7 +31,7 @@ See [Cross-device architecture and deployment requirements](docs/CROSS-DEVICE.md
 
 Only run hosted mode on a protected HTTPS address with strong, privately configured host secrets. The browser may contain sensitive signed-in website sessions; do not expose it publicly. A screenshot is not proof that a site action completed. High-impact agent clicks require approval. The current prototype is intended for one trusted owner, not multiple accounts.
 
-Remote browsing and AI calls require a cloud computer and AI provider. There is no legitimate way to guarantee unlimited cost-free cloud use. Usage limits and browser security need verification before business use.
+Remote browsing and AI calls require a cloud computer and AI provider. There is no legitimate way to guarantee unlimited cost-free cloud use. The cross-device prototype now includes persistent per-task, daily, and monthly token ceilings and an owner-visible usage counter. These are **not dollar limits**; you must separately restrict spending with the API provider. Browser security and hosting still need live verification.
 
 ## Development
 

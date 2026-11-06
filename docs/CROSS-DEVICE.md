@@ -65,6 +65,7 @@ For Railway:
 - Provide \`OPENAI_API_KEY\` in Railway's private environment controls and set spending limits in the API account. The hosted application deliberately does not permit changing API keys through its web interface.
 - Keep one replica until a shared session and job state system is built.
 - Set \`WORKMODE_TASK_TOKEN_LIMIT\` to a practical per-task model-token ceiling (default 30000). This is a safety ceiling, **not** a guaranteed dollar limit; input screenshots also consume tokens and AI providers charge separately.
+- The hosted version now also tracks token use on the persistent volume in \`ai-usage.json\`, defaulting to \`WORKMODE_DAILY_TOKEN_LIMIT=80000\` and \`WORKMODE_MONTHLY_TOKEN_LIMIT=500000\`. After either limit is reached, additional AI calls are blocked until that UTC time period resets. Response-level accounting may exceed a limit by the tokens used in the final response. An unreadable or corrupt ledger fails closed. These are **token-count safeguards, not dollar spending guarantees**; separately configure provider-level hard spending restrictions where available.
 - Set \`WORKMODE_CLOUD_ORIGIN\`, \`WORKMODE_CLOUD_PASSWORD\`, and \`WORKMODE_SESSION_SECRET\` privately. Never commit credentials or reuse an existing customer password.
 - Verify the Railway account is current before enabling networking. The previously inspected service had no domain, no volume, and no environment variables; no cloud installation was activated.
 

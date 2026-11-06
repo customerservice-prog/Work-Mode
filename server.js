@@ -13,6 +13,7 @@ import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js
 import { detectOllama, pullOllama } from './lib/local-ai.js';
 import { createHostedAuth } from './lib/hosted-auth.js';
 import { cloudRequirements, assertCloudRequirements } from './lib/cloud-config.js';
+import { createTokenBudget } from './lib/cloud-budget.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
@@ -27,6 +28,7 @@ const DATA_ROOT = CLOUD_MODE && process.env.WORKMODE_DATA_DIR
 const BROWSER_DIR = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_PROFILE
   ? path.resolve(process.env.WORKMODE_TEST_PROFILE)
   : path.join(DATA_ROOT, 'browser-profile');
+const cloudBudget = CLOUD_MODE ? createTokenBudget({ directory: DATA_ROOT }) : null;
 const HIGH_IMPACT = /\b(pay|purchase|buy|checkout|order|charge|refund|transfer|withdraw|delete|remove|release|unassign|assign|publish|post|send|submit|save|update|confirm|subscribe|cancel|sign|invite|archive|disable|close account|accept|agree|authorize)\b/i;
 const SESSION = { busy: false, phase: 'idle', task: '', answer: '', logs: [], imageVersion: 0, approval: null, steps: 0, startedAt: '' };
 let context = null;
@@ -411,6 +413,7 @@ async function runTask(task) {
   stopped = false;
   notify('status', { phase: SESSION.phase, task });
   try {
+    if (cloudBudget) await cloudBudget.requireAvailable();
     const settings = await effectiveSettings();
     const useLocalAI = !CLOUD_MODE && settings.provider === 'ollama';
     if (!useLocalAI && !settings.apiKey?.trim()) {
@@ -446,6 +449,7 @@ async function runTask(task) {
       ...(CLOUD_MODE ? { max_output_tokens: CLOUD_MODEL_MAX_OUTPUT } : {}),
       input: transcript
     });
+    if (cloudBudget) await cloudBudget.recordUsage(response.usage);
     let taskTokensUsed = Number(response.usage?.total_tokens || 0);
     for (let step = 0; step < MAX_STEPS; step++) {
       if (stopped) throw new Error('Stopped by user');
@@ -488,18 +492,20 @@ async function runTask(task) {
         });
       }
       if (useLocalAI) transcript.push(...response.output, ...inputs);
+      if (cloudBudget) await cloudBudget.requireAvailable();
       response = await client.responses.create({
         model, instructions: activePolicy, input: useLocalAI ? transcript : inputs,
         ...(!useLocalAI ? { previous_response_id: response.id } : {}),
         tools: activeTools, ...modelOptions,
         ...(CLOUD_MODE ? { max_output_tokens: CLOUD_MODEL_MAX_OUTPUT } : {})
       });
+      if (cloudBudget) await cloudBudget.recordUsage(response.usage);
       taskTokensUsed += Number(response.usage?.total_tokens || 0);
     }
     SESSION.phase = 'limited';
     SESSION.answer = 'Stopped at the per-task action limit of ' + MAX_STEPS + '. This is not confirmed complete. Review the browser, then give the next instruction.';
   } catch (err) {
-    SESSION.phase = stopped ? 'stopped' : 'error';
+    SESSION.phase = stopped ? 'stopped' : err.code === 'TOKEN_BUDGET_EXCEEDED' ? 'limited' : 'error';
     SESSION.answer = String(err.message || err).slice(0, 900);
     log('Task ' + SESSION.phase + ': ' + SESSION.answer);
   } finally {
@@ -696,6 +702,11 @@ app.post('/api/remote/scroll', async (req,res) => {
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Work-Mode', local: !CLOUD_MODE }));
 app.get('/api/mode', (_req,res) => res.json({ cloud: CLOUD_MODE, name: 'Work-Mode' }));
+app.get('/api/cloud/usage', async (_req, res) => {
+  if (!cloudBudget) return res.status(404).json({ error: 'Not hosted mode' });
+  try { res.set('Cache-Control', 'no-store').json(await cloudBudget.getStatus()); }
+  catch { res.status(503).json({ error: 'AI usage ledger unavailable; AI tasks are blocked until repaired' }); }
+});
 app.get('/api/cloud/readiness', async (_req,res) => {
   if (!CLOUD_MODE) return res.status(404).json({ error:'Not hosted mode' });
   try {

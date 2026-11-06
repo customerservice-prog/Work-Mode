@@ -52,6 +52,7 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     assert.equal((await request('/api/mode')).status,401);
     assert.equal((await request('/api/screenshot')).status,401);
     assert.equal((await request('/api/cloud/readiness')).status,401);
+    assert.equal((await request('/api/cloud/usage')).status,401);
     assert.equal((await request('/api/events')).status,401);
     const health=await request('/api/health');
     assert.equal(health.status,200);
@@ -70,6 +71,11 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     assert.equal(readiness.dataDirectoryWritable,true);
     assert.equal(readiness.volumeAttached,false);
     assert.equal(readiness.browserInstalled,true);
+    const usage=await (await request('/api/cloud/usage','GET',undefined,cookie)).json();
+    assert.equal(usage.dayTokens,0);
+    assert.equal(usage.monthTokens,0);
+    assert.equal(usage.dailyLimit,80000);
+    assert.equal(usage.monthlyLimit,500000);
     const cloudSettings=await (await request('/api/settings','GET',undefined,cookie)).json();
     assert.equal(cloudSettings.provider,'openai');
     assert.equal(cloudSettings.hasApiKey,false);

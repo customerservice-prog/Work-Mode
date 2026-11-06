@@ -28,6 +28,21 @@ async function remoteAction(path, data) {
     throw err;
   }
 }
+async function refreshCloudUsage() {
+  if (!document.body.classList.contains('cloud-mode')) return;
+  const usageEl=$r('cloudUsage');
+  try {
+    const res=await fetch('/api/cloud/usage',{credentials:'same-origin',cache:'no-store'});
+    if (!res.ok) throw Error('Cannot read usage limits');
+    const v=await res.json();
+    usageEl.textContent = 'AI tokens used: ' + Number(v.dayTokens).toLocaleString() + ' / ' +
+      Number(v.dailyLimit).toLocaleString() + ' today, and ' +
+      Number(v.monthTokens).toLocaleString() + ' / ' +
+      Number(v.monthlyLimit).toLocaleString() + ' this month. API charges are separate.';
+  } catch {
+    usageEl.textContent='AI usage could not be verified; stop new tasks until the server reports its limits.';
+  }
+}
 async function initializeRemote() {
   try {
     const response = await fetch('/api/mode', { credentials:'same-origin' });
@@ -35,6 +50,7 @@ async function initializeRemote() {
     const mode = await response.json();
     if (!mode.cloud) return;
     document.body.classList.add('cloud-mode');
+    void refreshCloudUsage();
     try {
       const response=await fetch('/api/cloud/readiness',{credentials:'same-origin'});
       if (response.ok) {
@@ -108,3 +124,8 @@ void initializeRemote();
 
 $r('installHelp').onclick = () => $r('installDialog').showModal();
 $r('closeInstallHelp').onclick = () => $r('installDialog').close();
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) void refreshCloudUsage();
+});
+setInterval(() => { if (!document.hidden) void refreshCloudUsage(); }, 60000);
