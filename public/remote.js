@@ -37,6 +37,17 @@ async function initializeRemote() {
     document.body.classList.add('cloud-mode');
     $r('remoteControls').hidden = false;
     $r('cloudLogout').hidden = false;
+    $r('installHelp').hidden = false;
+    const caption = document.querySelector('.side .kicker');
+    if (caption) caption.textContent = 'Your private cloud assistant';
+    const description = document.querySelector('.side p.hint');
+    if (description) description.textContent = 'The AI and browser run on your private hosted computer. Your phone, iPad or laptop is a lightweight controller. Actions require your approval.';
+    const browserPanelTitle = document.querySelector('#browserPanel .paneltitle');
+    if (browserPanelTitle) browserPanelTitle.childNodes.forEach(node => {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.includes('Live browser preview')) {
+        node.textContent = 'Remote browser preview ';
+      }
+    });
     $r('remoteEnableClick').checked = false;
     if (window.showMobileView) window.showMobileView('chat');
   } catch {}
@@ -79,3 +90,6 @@ $r('cloudLogout').onclick = async () => {
   } catch (e) { setRemoteMessage(e.message); }
 };
 void initializeRemote();
+
+$r('installHelp').onclick = () => $r('installDialog').showModal();
+$r('closeInstallHelp').onclick = () => $r('installDialog').close();

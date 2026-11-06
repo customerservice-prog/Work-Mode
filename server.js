@@ -18,7 +18,7 @@ const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
 const hostedSecurity = createHostedAuth({ enabled: CLOUD_MODE, origin: process.env.WORKMODE_CLOUD_ORIGIN, password: process.env.WORKMODE_CLOUD_PASSWORD, secret: process.env.WORKMODE_SESSION_SECRET });
 
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
-const MAX_STEPS = Math.min(80, Math.max(2, Number(process.env.MAX_STEPS) || 40));
+const MAX_STEPS = Math.min(CLOUD_MODE ? 30 : 80, Math.max(2, Number(process.env.MAX_STEPS) || (CLOUD_MODE ? 20 : 40)));
 const DATA_ROOT = CLOUD_MODE && process.env.WORKMODE_DATA_DIR
   ? path.resolve(process.env.WORKMODE_DATA_DIR) : path.join(os.homedir(), '.work-mode');
 const BROWSER_DIR = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_PROFILE
@@ -53,6 +53,16 @@ app.use((req, res, next) => {
   catch (err) { res.status(403).json({ error: String(err.message || err) }); }
 });
 app.use(express.json({ limit: '100kb' }));
+if (CLOUD_MODE) app.use((_req, res, next) => {
+  res.set('Cache-Control','no-store');
+  res.set('Pragma','no-cache');
+  res.set('X-Frame-Options','DENY');
+  res.set('X-Content-Type-Options','nosniff');
+  res.set('Referrer-Policy','no-referrer');
+  res.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');
+  res.set('Strict-Transport-Security','max-age=31536000');
+  next();
+});
 app.use(hostedSecurity.middleware);
 app.get('/login', (_req,res) => {
   if (!CLOUD_MODE) return res.redirect('/');
@@ -116,7 +126,7 @@ async function ensureBrowser() {
           await route.abort('blockedbyclient');
           return;
         }
-        if (requested.isNavigationRequest()) await assertPublicNavigation(target);
+        if (CLOUD_MODE || requested.isNavigationRequest()) await assertPublicNavigation(target);
         else assertPublicUrl(target);
         await route.continue();
       } catch {

@@ -50,6 +50,12 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     }
     assert.ok(ready,'Cloud server did not start: '+errors);
     assert.equal((await request('/api/mode')).status,401);
+    assert.equal((await request('/api/screenshot')).status,401);
+    assert.equal((await request('/api/events')).status,401);
+    const health=await request('/api/health');
+    assert.equal(health.status,200);
+    assert.equal(health.headers.get('x-frame-options'),'DENY');
+    assert.equal(health.headers.get('cache-control'),'no-store');
     assert.equal((await request('/')).status,302);
     const login=await request('/api/auth/login','POST',{password:'safelongtestpassword-abc123'});
     assert.equal(login.status,200);
