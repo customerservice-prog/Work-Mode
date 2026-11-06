@@ -1,82 +1,59 @@
-# Work-Mode
+# Work-Mode — Windows Desktop Assistant
 
-**A local, user-controlled browser assistant.** This is a new, independent project, not a modification of Auto-Coder.
+**Work-Mode is your separate, local AI browser assistant.** It is not an official ChatGPT Work product. It lets you type instructions, watch a controlled browser, and approve high-impact actions.
 
-## What it is
+## Install it on your Windows desktop (no coding)
 
-Open a chat page on your Windows computer, describe what you want done on a website, and watch Work-Mode use its own visible browser. It can navigate, inspect page controls, click, type and scroll. It records actions and shows screenshots. Sensitive clicks require your approval. It does **not** turn regular ChatGPT into Work and it does not use ChatGPT Work credits.
+1. Open **[Work-Mode Releases](https://github.com/customerservice-prog/Work-Mode/releases)**.
+2. Download the file named **Work-Mode-Setup-0.2.0-x64.exe** (when the installer build appears).
+3. Double-click the downloaded **.exe** and follow Windows installation prompts.
+4. Open **Work-Mode** using the new desktop shortcut or Start menu.
+5. Click **AI Settings** and choose either **OpenAI API** (metered, requires API key) or **Local Ollama** (no model API fee; requires separate local Ollama installation).
+6. Click **Open Browser**. An Edge window opens; log in to the site yourself once, then tell Work-Mode what you want it to do.
 
-**Project status: advanced local-browser MVP / not production-ready.** The browser runner has not yet been tested against your Google Voice account or other authenticated sites. It uses a **separate browser profile**, so you sign in there once yourself. It does not import existing Edge/Chrome sessions.
+**That's it.** You do not need GitHub, a code editor, Node.js, Railway, terminal commands, or a ZIP of source code to use the desktop app. The installer is built from this source using GitHub Actions.
 
-## Use on Windows
+The desktop installer is **not code-signed** yet and may trigger Windows SmartScreen. Do not run unexpected files from unverified publishers. Check that your download came from this exact repository and its Releases page. Early versions are prereleases and should be supervised.
 
-1. Install [Node.js 22+](https://nodejs.org/) if you don't have it.
-2. Download this repository from GitHub (Code -> Download ZIP), then extract it.
-3. Double-click `setup-windows.cmd` and follow the prompts. This installs dependencies and creates your local `.env` file.
-4. Start Work-Mode, click **AI Settings**, and choose your AI mode. You do **not** have to edit code or configuration files. OpenAI API mode is billed separately; Ollama local mode does not have per-message model API charges.
-5. Double-click `start-windows.cmd`, open **http://127.0.0.1:3168**, and choose **Open Browser**. Sign in yourself to sites in that window, then give the agent a task.
+### What the desktop app does
 
-The agent only runs while the local app is open. Keep the command window open.
+- Opens a chat window on your computer.
+- Operates a **separate Microsoft Edge automation profile** using Playwright; this does not silently take over your normal signed-in Edge tabs.
+- Navigates sites, reads pages, clicks, types, scrolls, selects dropdown options, and switches tabs.
+- Keeps browser login cookies locally so you do not sign into the same site every session (where permitted).
+- Shows screenshots, actions, verification status, and task history.
+- Requires approval for potentially consequential actions (sending, deleting, purchasing, releasing phone numbers).
+- Allows stopping tasks and switching AI providers from **AI Settings**.
 
-### Browser operator upgrade
+### What it cannot guarantee
 
-- Multiple tab listing, switching, and opening; back navigation and keyboard/dropdown controls.
-- Concrete page verification instead of assuming a click proves success.
-- Private-network URL blocks and a local-only API.
-- Local task history and a way to continue earlier tasks.
-- Automated safety and browser smoke tests.
+This is an **early local-browser MVP**, not yet a complete ChatGPT Work replacement. Login challenges, CAPTCHAs, complex workflows and some websites may need manual help, and the app has not yet passed a real Google Voice end-to-end task. It does not provide remote cloud computer use, all third-party connectors, or continuous unattended jobs. Never trust a claimed completion without checking the result.
 
-### Costs
-Local software and Playwright are free. **OpenAI API mode** has separate usage charges and needs an API key. **Ollama mode** runs a model on your own PC with no per-message model API bill, but uses your computer's RAM/CPU/GPU and can be slower or less reliable. Neither mode consumes ChatGPT Work credits. Hosting on Railway or another cloud provider has its own cost.
+### AI cost choices
 
-### Choose your AI provider
+**OpenAI API:** Paid separately from your ChatGPT subscription. You enter an API key in the app. Set a usage budget in your API account.
 
-**Option A — paid API mode (more reliable for complex tasks):** In Work-Mode, click **AI Settings**, choose OpenAI API, and enter a key. Set your own API spending limits in the OpenAI API dashboard.
+**Local Ollama:** Download [Ollama for Windows](https://ollama.com/download/windows), run `ollama pull qwen3:8b` once in the Windows Terminal, and select **Free local AI** in the app. Large model download and adequate PC memory are required. Local AI may be substantially less reliable on complex sites.
 
-**Option B — local Ollama (no per-message model API fee):** Install [Ollama](https://ollama.com/download/windows), open Windows Terminal once and run `ollama pull qwen3:8b` (a multi-GB download; a PC with sufficient memory is required). Then open **AI Settings** in Work-Mode, select Free local AI, and keep model `qwen3:8b`. No OpenAI API key is needed. Ollama must be running when you use Work-Mode.
+Neither uses ChatGPT Work credits. Building the Windows installer with GitHub Actions is separate from Railway; **Railway is not required for the desktop app**.
 
-Ollama's compatible Responses endpoint does not support `previous_response_id`; Work-Mode instead carries the tool calls forward explicitly in local mode. Tool-calling quality depends on the installed model, so some website tasks may not work well in local mode. Never consider an unverified task completed.
+### Safety & privacy
 
-The app's action limit (`MAX_STEPS`) bounds browser operations, **not** the price of model tokens. Be careful with long or repeated tasks.
+- The local HTTP backend binds only to `127.0.0.1`.
+- Browser cookies are stored locally under your Windows profile; passwords and verification codes should be entered by you in the browser, not into agent chat.
+- App AI keys and history are stored on the computer, never in this public source repository.
+- The desktop shell does not grant webpage Node.js access, and links open in the system browser.
+- Work-Mode does not install a browser extension, spy on your normal tabs, or access unrelated computer files.
+- No legitimate automated browser agent can guarantee safe or correct execution on every website. Use approvals and supervise financial or account changes.
 
-## Safety
-- The server binds to **127.0.0.1 only**; it is not a remotely hosted public control panel. A successful Railway deployment cannot operate the browser on your personal computer; install and run this app on Windows.
-- The automation browser stores cookies under your computer's local user profile, outside GitHub.
-- Passwords and verification codes must be typed by **you**, in the browser window.
-- Browser page text is treated as untrusted; it cannot authorize actions.
-- Potentially high-impact clicks (payment, posting, deletion, saving, number assignment, sending messages etc.) require an approval in the local UI.
-- Stops and approval denials are supported. No security boundary can fully guarantee a malicious website or flawed model won't make mistakes; supervise sensitive tasks.
-- The public GitHub repository must never contain passwords, API keys, customer data, or saved browser profiles.
+## For developers
 
-## What works in this initial version
-- Real local Playwright Chromium with persistent login, visible while it acts
-- Chat/task input; status, action log and preview screenshots
-- OpenAI Responses API with structured browser tools and bounded steps
-- Explicit approval for sensitive button clicks
-- Stop button and no automatic deployments or payments
-- Local-only server and basic URL safeguards
+Run locally from source with `npm install`, `npx playwright install chromium`, `npm start`, and visit `http://127.0.0.1:3168`. For desktop development, use `npm run desktop` after installing dependencies; the packaged Windows desktop variant uses the installed Microsoft Edge channel.
 
-## What still needs work
-- Automated tests and a verified Windows install
-- Robust handling of every website, multi-step authentication, popups, captchas, and complex applications
-- More complete confirmations, domain/URL security policies and audit logs
-- Better error recovery, persistent task history, lower-cost local models
-- No direct integration with this ChatGPT conversation yet
-- Full computer control, recurring tasks, connected apps and the broader range of ChatGPT Work functions are not implemented
+Build an unsigned Windows installer on Windows with `npm run desktop:build`. The repository workflow `.github/workflows/windows-installer.yml` builds the same installer on GitHub's Windows runner and publishes its verified executable to GitHub Releases.
 
-## Source-project consolidation
+## Legacy project boundaries
 
-This project is **new**. Auto-Coder stays independent and untouched. Prior related projects were reviewed for ideas, not copied wholesale: BryanTheBrain (agent staging and verification), CloneAI (Playwright inspection), Genesis Loop (task sequencing), and two empty GitHub repositories (Mirror-OS-, phone-super-assistant). See `docs/LEGACY-REVIEW.md`.
+This repository is new and independent. Auto-Coder remains separate and untouched. We reviewed BryanTheBrain, CloneAI, Genesis Loop, Mirror-OS, and Phone Super Assistant for reusable ideas. They have not been deleted. See [legacy review](docs/LEGACY-REVIEW.md).
 
-**Old projects have NOT been deleted.** Back up their full histories and check deployment/domain dependencies before deleting. This GitHub connector cannot delete whole repositories.
-
-## Development
-
-```sh
-npm install
-npx playwright install chromium
-cp .env.example .env
-npm start
-```
-
-Use Node 22+. The page is at `http://127.0.0.1:3168`. Set `OPENAI_API_KEY` in the local `.env`. Environment values are never committed.
+Copyright © Work-Mode. Early testing release.

@@ -1,0 +1,67 @@
+name: Build Work-Mode Windows installer
+on:
+  push:
+    branches: [main, feature/windows-desktop-installer]
+    paths:
+      - 'desktop/**'
+      - 'server.js'
+      - 'lib/**'
+      - 'public/**'
+      - 'package.json'
+      - '.github/workflows/windows-installer.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install project dependencies
+        run: npm install --no-audit --no-fund
+      - name: Verify JavaScript syntax
+        run: |
+          node --check server.js
+          node --check desktop/main.mjs
+          node --check public/app.js
+          node --check public/extra.js
+          node --check public/settings.js
+      - name: Build installable Windows desktop app
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run desktop:build
+      - name: Verify installer and bundled application files
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem -Path "dist" -Filter "Work-Mode-Setup-*.exe" -File)
+          if ($installer.Count -ne 1) { throw "Expected one Work-Mode setup EXE; found $($installer.Count)" }
+          if ($installer[0].Length -lt 15000000) { throw "Setup EXE is unexpectedly small" }
+          if (!(Test-Path "dist/win-unpacked/resources/app.asar")) { throw "Application package was not generated" }
+          Write-Host "Verified $($installer[0].Name) ($([math]::Round($installer[0].Length/1MB, 1)) MB)"
+      - name: Attach installer as downloadable GitHub Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Work-Mode-Desktop-Windows-Setup
+          path: dist/Work-Mode-Setup-*.exe
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish installer to GitHub Releases
+        if: github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $exe = (Get-ChildItem "dist" -Filter "Work-Mode-Setup-*.exe" -File | Select-Object -First 1).FullName
+          $tag = "v0.2.0"
+          gh release view $tag --repo "${{ github.repository }}" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag $exe --clobber --repo "${{ github.repository }}"
+          } else {
+            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.2.0 for Windows" --prerelease --notes "First Windows desktop installer. Download the Work-Mode-Setup .exe, install, and open the desktop shortcut. Includes local browser control and AI settings. Unsigned early release; real authenticated website tasks still require testing. Windows with Microsoft Edge required."
+          }

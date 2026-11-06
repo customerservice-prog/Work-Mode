@@ -1,8 +1,12 @@
 {
   "name": "work-mode",
-  "version": "0.1.0",
+  "productName": "Work-Mode",
+  "version": "0.2.0",
+  "description": "Local AI browser assistant for Windows",
   "private": true,
   "type": "module",
+  "main": "desktop/main.mjs",
+  "author": "Work-Mode",
   "engines": {
     "node": ">=22"
   },
@@ -10,12 +14,54 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "browser:install": "playwright install chromium",
-    "test": "node --test"
+    "test": "node --test",
+    "desktop": "electron .",
+    "desktop:build": "electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "openai": "^6.0.0",
     "playwright": "1.63.0"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.workmode.desktop",
+    "productName": "Work-Mode",
+    "asar": true,
+    "files": [
+      "desktop/**/*",
+      "server.js",
+      "lib/**/*",
+      "public/**/*",
+      "package.json",
+      "!desktop/**/*.md"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "desktop/assets/work-mode.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Work-Mode",
+      "artifactName": "Work-Mode-Setup-${version}-${arch}.${ext}"
+    },
+    "publish": null
   }
 }

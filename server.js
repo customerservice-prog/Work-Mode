@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import net from 'node:net';
 import fs from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import OpenAI from 'openai';
 import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretField, assertLocalRequest, redactForLog } from './lib/safety.js';
@@ -43,7 +44,7 @@ app.use((req, res, next) => {
   catch (err) { res.status(403).json({ error: String(err.message || err) }); }
 });
 app.use(express.json({ limit: '100kb' }));
-app.use(express.static(path.join(process.cwd(), 'public'), { dotfiles: 'deny' }));
+app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), 'public'), { dotfiles: 'deny' }));
 
 function notify(type, data = {}) {
   const event = { type, ...data, at: new Date().toISOString() };
@@ -77,6 +78,7 @@ async function ensureBrowser() {
   if (!context) {
     await fs.mkdir(DATA_ROOT, { recursive: true });
     context = await chromium.launchPersistentContext(BROWSER_DIR, {
+      ...(process.env.WORKMODE_DESKTOP === '1' ? { channel: 'msedge' } : {}),
       headless: process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1',
       viewport: { width: 1200, height: 820 },
       acceptDownloads: false
@@ -543,7 +545,31 @@ app.post('/api/stop', (_req, res) => {
   log('Stop requested by user');
   res.json({ ok: true });
 });
-app.listen(PORT, '127.0.0.1', () => {
-  console.log('Work-Mode ready at http://127.0.0.1:' + PORT);
-  console.log('No public-network listener. Keep this terminal open while using Work-Mode.');
-});
+export function startLocalServer(port = PORT) {
+  return new Promise((resolve, reject) => {
+    const localServer = app.listen(port, '127.0.0.1');
+    localServer.once('error', reject);
+    localServer.once('listening', () => {
+      console.log('Work-Mode ready at http://127.0.0.1:' + localServer.address().port);
+      resolve(localServer);
+    });
+  });
+}
+
+export async function stopBrowser() {
+  stopped = true;
+  if (pending) pending.resolve(false);
+  if (context) {
+    const current = context;
+    context = null;
+    activePage = null;
+    await current.close().catch(() => {});
+  }
+}
+
+if (process.env.WORKMODE_EMBEDDED !== '1') {
+  void startLocalServer().catch(err => {
+    console.error('Could not start Work-Mode local server:', err.message);
+    process.exitCode = 1;
+  });
+}
