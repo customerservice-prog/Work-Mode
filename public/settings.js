@@ -60,13 +60,17 @@ async function openAISettings() {
   try {
     const config = await settingsRequest('/api/settings');
     settingsEl('aiProvider').value = config.provider;
+    const freeOption = settingsEl('aiProvider').querySelector('option[value="ollama"]');
+    if (freeOption) freeOption.disabled = Boolean(config.cloud);
+    if (config.cloud) settingsEl('aiProvider').value = 'openai';
     settingsEl('apiModel').value = config.openaiModel;
     settingsEl('ollamaModel').value = config.ollamaModel;
     settingsEl('apiKey').value = '';
-    settingsEl('keyNote').textContent = config.hasApiKey
-      ? 'An API key is saved locally. Leave this blank to keep it.'
-      : 'No API key saved. Paste one from your OpenAI API account.';
-    settingsEl('settingsMessage').textContent = '';
+    settingsEl('keyNote').textContent = config.cloud
+      ? (config.hasApiKey ? 'AI access is configured for this private server.' : 'The private server has no AI API key configured yet.')
+      : (config.hasApiKey ? 'An API key is saved locally. Leave this blank to keep it.' : 'No API key saved. Paste one from your OpenAI API account.');
+    settingsEl('settingsMessage').textContent = config.cloud
+      ? 'This device connects to your private cloud browser. The AI model runs on the server, not on this device.' : '';
     updateProviderVisibility();
     settingsEl('settingsDialog').showModal();
     if (config.provider === 'ollama') await refreshLocalAI();

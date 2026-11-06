@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#111218">
+<title>Sign in — Work-Mode</title>
+<link rel="icon" type="image/svg+xml" href="/icons/work-mode.svg">
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100dvh;display:grid;place-items:center;padding:20px;background:#111218;color:#eef1f8;font:16px/1.5 system-ui,Segoe UI,sans-serif}
+.card{width:min(100%,440px);border:1px solid #373d4c;background:#1b1f2b;padding:30px;border-radius:22px;box-shadow:0 20px 90px #0004}
+h1{margin:0 0 8px;font-size:28px}p{color:#b0b9cb;margin:0 0 24px}label{display:block;font-size:14px;font-weight:700;margin-bottom:8px}
+input{width:100%;min-height:50px;padding:12px;border:1px solid #687287;background:#10141c;color:white;border-radius:10px;font-size:17px}
+button{width:100%;min-height:50px;margin-top:18px;background:#d9edff;border:0;border-radius:11px;color:#122239;font-size:16px;font-weight:700;cursor:pointer}
+button:disabled{opacity:.65}#error{min-height:25px;color:#ffb6b6;margin-top:14px;font-size:13px}
+.mark{width:44px;height:44px;border-radius:13px;background:#c8e4ff;color:#17223a;display:grid;place-items:center;font-weight:900;font-size:25px;margin-bottom:22px}
+</style></head><body>
+<main class="card">
+<div class="mark">W</div><h1>Sign in to Work-Mode</h1>
+<p>Access your private browser assistant from this device.</p>
+<form id="login"><label for="password">Work-Mode access password</label>
+<input id="password" type="password" autocomplete="current-password" required minlength="1" autofocus>
+<button id="signIn" type="submit">Sign in</button>
+<div id="error" role="alert" aria-live="polite"></div></form>
+</main>
+<script>
+document.querySelector('#login').addEventListener('submit',async event=>{
+ event.preventDefault();
+ const button=document.querySelector('#signIn'),field=document.querySelector('#password'),error=document.querySelector('#error');
+ button.disabled=true;error.textContent='';
+ try{
+  const response=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:field.value}),credentials:'same-origin'});
+  field.value='';
+  const body=await response.json();
+  if(!response.ok)throw Error(body.error||'Sign-in failed');
+  location.replace('/');
+ }catch(err){error.textContent=err.message;button.disabled=false;}
+});
+</script></body></html>

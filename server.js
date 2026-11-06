@@ -11,11 +11,16 @@ import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretFi
 import { recordTask, listHistory, historyEntry } from './lib/history.js';
 import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
 import { detectOllama, pullOllama } from './lib/local-ai.js';
+import { createHostedAuth } from './lib/hosted-auth.js';
 
 const app = express();
+const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
+const hostedSecurity = createHostedAuth({ enabled: CLOUD_MODE, origin: process.env.WORKMODE_CLOUD_ORIGIN, password: process.env.WORKMODE_CLOUD_PASSWORD, secret: process.env.WORKMODE_SESSION_SECRET });
+
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
 const MAX_STEPS = Math.min(80, Math.max(2, Number(process.env.MAX_STEPS) || 40));
-const DATA_ROOT = path.join(os.homedir(), '.work-mode');
+const DATA_ROOT = CLOUD_MODE && process.env.WORKMODE_DATA_DIR
+  ? path.resolve(process.env.WORKMODE_DATA_DIR) : path.join(os.homedir(), '.work-mode');
 const BROWSER_DIR = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_PROFILE
   ? path.resolve(process.env.WORKMODE_TEST_PROFILE)
   : path.join(DATA_ROOT, 'browser-profile');
@@ -44,10 +49,15 @@ async function validateBrowserUrl(raw) {
 
 app.disable('x-powered-by');
 app.use((req, res, next) => {
-  try { assertLocalRequest(req); next(); }
+  try { if (!CLOUD_MODE) assertLocalRequest(req); next(); }
   catch (err) { res.status(403).json({ error: String(err.message || err) }); }
 });
 app.use(express.json({ limit: '100kb' }));
+app.use(hostedSecurity.middleware);
+app.get('/login', (_req,res) => {
+  if (!CLOUD_MODE) return res.redirect('/');
+  res.set('Cache-Control','no-store').sendFile(path.join(path.dirname(fileURLToPath(import.meta.url)), 'public', 'login.html'));
+});
 app.use(express.static(path.join(path.dirname(fileURLToPath(import.meta.url)), 'public'), { dotfiles: 'deny' }));
 
 function notify(type, data = {}) {
@@ -82,8 +92,9 @@ async function ensureBrowser() {
   if (!context) {
     await fs.mkdir(DATA_ROOT, { recursive: true });
     context = await chromium.launchPersistentContext(BROWSER_DIR, {
-      ...(process.env.WORKMODE_DESKTOP === '1' ? { channel: 'msedge' } : {}),
-      headless: process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1',
+      ...(process.env.WORKMODE_DESKTOP === '1' && !CLOUD_MODE ? { channel: 'msedge' } : {}),
+      headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
+      chromiumSandbox: CLOUD_MODE && process.env.NODE_ENV !== 'test',
       viewport: { width: 1200, height: 820 },
       acceptDownloads: false
     });
@@ -380,7 +391,7 @@ async function runTask(task) {
   notify('status', { phase: SESSION.phase, task });
   try {
     const settings = await readSettings();
-    const useLocalAI = settings.provider === 'ollama';
+    const useLocalAI = !CLOUD_MODE && settings.provider === 'ollama';
     if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
     }
@@ -518,11 +529,15 @@ app.post('/api/local-ai/cancel', (_req, res) => {
 });
 
 app.get('/api/settings', async (_req, res) => {
-  try { res.json(await getPublicSettings()); }
+  try {
+    const settings = await getPublicSettings();
+    res.json(CLOUD_MODE ? { ...settings, provider:'openai', cloud:true } : settings);
+  }
   catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
 app.post('/api/settings', async (req, res) => {
   if (SESSION.busy) return res.status(409).json({ error: 'Finish the running task before changing AI settings' });
+  if (CLOUD_MODE && req.body?.provider !== 'openai') return res.status(400).json({ error:'Cloud mode currently requires OpenAI API' });
   try { res.json(await saveSettings(req.body || {})); }
   catch (err) { res.status(400).json({ error: String(err.message || err) }); }
 });
@@ -569,7 +584,82 @@ app.post('/api/browser/new', async (_req, res) => {
   } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
 
-app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Work-Mode', local: true }));
+
+function remoteReady(res) {
+  if (!CLOUD_MODE) {
+    res.status(404).json({ error:'Remote browser control only applies to hosted mode' });
+    return false;
+  }
+  if (SESSION.busy) {
+    res.status(409).json({ error:'Stop the AI task before taking manual control of the browser' });
+    return false;
+  }
+  return true;
+}
+app.post('/api/remote/navigate', async (req,res) => {
+  if (!remoteReady(res)) return;
+  try {
+    const url = await validateBrowserUrl(req.body?.url);
+    const page = await ensureBrowser();
+    await page.goto(url,{waitUntil:'domcontentloaded',timeout:35000});
+    snapshotRevision++;
+    await refreshImage();
+    log('Owner navigated remote browser to ' + new URL(page.url()).origin);
+    res.json({ ok:true,url:page.url(),imageVersion:SESSION.imageVersion });
+  } catch (err) { res.status(400).json({ error:String(err.message||err).slice(0,350) }); }
+});
+app.post('/api/remote/click', async (req,res) => {
+  if (!remoteReady(res)) return;
+  try {
+    const x = Number(req.body?.x),y=Number(req.body?.y);
+    const page = await ensureBrowser();
+    const size = page.viewportSize();
+    if (!Number.isFinite(x)||!Number.isFinite(y)||x<0||y<0||x>size.width||y>size.height) {
+      return res.status(400).json({ error:'Invalid browser coordinates' });
+    }
+    await page.mouse.click(Math.round(x),Math.round(y));
+    snapshotRevision++;
+    await refreshImage();
+    res.json({ok:true,imageVersion:SESSION.imageVersion,url:page.url()});
+  } catch(err) { res.status(400).json({ error:String(err.message||err).slice(0,350) }); }
+});
+app.post('/api/remote/type', async (req,res) => {
+  if (!remoteReady(res)) return;
+  try {
+    const value = String(req.body?.text || '');
+    if (!value || value.length > 1000) return res.status(400).json({ error:'Text must contain 1 to 1000 characters' });
+    const page = await ensureBrowser();
+    // No typed values or field contents are written to action logs.
+    await page.keyboard.insertText(value);
+    await refreshImage();
+    res.json({ok:true,imageVersion:SESSION.imageVersion});
+  } catch(err) { res.status(400).json({ error:String(err.message||err).slice(0,350) }); }
+});
+app.post('/api/remote/key', async(req,res) => {
+  if (!remoteReady(res)) return;
+  try {
+    const allowed = ['Tab','Enter','Backspace','Escape','ArrowDown','ArrowUp','ArrowLeft','ArrowRight','Space'];
+    if (!allowed.includes(req.body?.key)) return res.status(400).json({error:'Unsupported key'});
+    const page=await ensureBrowser();
+    await page.keyboard.press(req.body.key);
+    await refreshImage();
+    res.json({ok:true,imageVersion:SESSION.imageVersion});
+  } catch(err){res.status(400).json({error:String(err.message||err).slice(0,350)});}
+});
+app.post('/api/remote/scroll', async (req,res) => {
+  if (!remoteReady(res)) return;
+  try {
+    const direction=req.body?.direction;
+    if(!['up','down'].includes(direction))return res.status(400).json({error:'Invalid scroll direction'});
+    const page=await ensureBrowser();
+    await page.mouse.wheel(0,direction==='up'?-550:550);
+    await refreshImage();
+    res.json({ok:true,imageVersion:SESSION.imageVersion});
+  } catch(err){res.status(400).json({error:String(err.message||err).slice(0,350)});}
+});
+
+app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Work-Mode', local: !CLOUD_MODE }));
+app.get('/api/mode', (_req,res) => res.json({ cloud: CLOUD_MODE, name: 'Work-Mode' }));
 app.get('/api/status', (_req, res) => res.json(exposeState()));
 app.get('/api/screenshot', (_req, res) => {
   if (!latestImage) return res.status(404).end();
@@ -612,10 +702,10 @@ app.post('/api/stop', (_req, res) => {
 });
 export function startLocalServer(port = PORT) {
   return new Promise((resolve, reject) => {
-    const localServer = app.listen(port, '127.0.0.1');
+    const localServer = app.listen(port, CLOUD_MODE ? '0.0.0.0' : '127.0.0.1');
     localServer.once('error', reject);
     localServer.once('listening', () => {
-      console.log('Work-Mode ready at http://127.0.0.1:' + localServer.address().port);
+      console.log('Work-Mode server ready on port ' + localServer.address().port + (CLOUD_MODE ? ' (protected hosted mode)' : ' (local only)'));
       resolve(localServer);
     });
   });

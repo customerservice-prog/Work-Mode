@@ -1,59 +1,42 @@
-# Work-Mode — Windows Desktop Assistant
+# Work-Mode — AI Browser Assistant
 
-**Work-Mode is your separate, local AI browser assistant.** It is not an official ChatGPT Work product. It lets you type instructions, watch a controlled browser, and approve high-impact actions.
+**Work-Mode is being developed as one private assistant for iPad, phone, Windows, and inexpensive laptops.** The cross-device edition is an **unreleased prototype** in a feature branch; it has not been deployed to a public cloud URL.
 
-## Install it on your Windows desktop (no coding)
+## What you'll use
 
-1. Open **[Work-Mode Releases](https://github.com/customerservice-prog/Work-Mode/releases)**.
-2. Download the file named **Work-Mode-Setup-0.3.0-x64.exe** (when the installer build appears).
-3. Double-click the downloaded **.exe** and follow Windows installation prompts.
-4. Open **Work-Mode** using the new desktop shortcut or Start menu.
-5. On first launch, Work-Mode opens **AI Settings**. Choose **Free local AI** or **OpenAI API**. For free mode, install and open Ollama for Windows using the link in the app, then click **Download AI model** in Work-Mode. No Terminal command is necessary.
-6. Click **Open Browser**. An Edge window opens; log in to the site yourself once, then tell Work-Mode what you want it to do.
+On any device, open a secure HTTPS Work-Mode website and sign in. Chat with the assistant, watch a remote browser, approve consequential actions, and take manual control for logins through a touchscreen. On iPhone, iPad or Android, add the page to your Home Screen.
 
-**That's it.** You do not need a code editor, Node.js, Railway, or terminal commands to use the installed desktop app. Only installation and AI setup in the app are required. The installer is built from this source using GitHub Actions.
+The AI and website browser run on a hosted computer, **not on your phone/iPad/laptop**. This removes the need to install Ollama or a huge AI model on every device. It does require hosting and metered AI resources; it does not consume ChatGPT Work credits.
 
-The desktop installer is **not code-signed** yet and may trigger Windows SmartScreen. Do not run unexpected files from unverified publishers. Check that your download came from this exact repository and its Releases page. Early versions are prereleases and should be supervised.
+## Existing Windows download
 
-### What the desktop app does
+The already-published [Work-Mode Desktop v0.3.0 installer](https://github.com/customerservice-prog/Work-Mode/releases/tag/v0.3.0) remains a **local-only early release**. It is not yet the cross-device edition. Auto-Coder is separate and untouched.
 
-- Opens a chat window on your computer.
-- Operates a **separate Microsoft Edge automation profile** using Playwright; this does not silently take over your normal signed-in Edge tabs.
-- Navigates sites, reads pages, clicks, types, scrolls, selects dropdown options, and switches tabs.
-- Keeps browser login cookies locally so you do not sign into the same site every session (where permitted).
-- Shows screenshots, actions, verification status, and task history.
-- Requires approval for potentially consequential actions (sending, deleting, purchasing, releasing phone numbers).
-- Allows stopping tasks and switching AI providers from **AI Settings**.
+## Cross-device edition status
 
-### What it cannot guarantee
+The feature branch adds:
+- Responsive mobile/tablet chat and browser views
+- A web app manifest and safe-to-install Home Screen shell
+- Password-gated hosted access, protected API endpoints, and session cookies
+- A browser running on the server, streamed as screenshots to your device
+- Touch/click, typing, navigation, scrolling, and keyboard controls for the remote browser
+- Private browser-session and history storage on a mounted host volume
+- A host container configuration and automated authentication tests
 
-This is an **early local-browser MVP**, not yet a complete ChatGPT Work replacement. Login challenges, CAPTCHAs, complex workflows and some websites may need manual help, and the app has not yet passed a real Google Voice end-to-end task. It does not provide remote cloud computer use, all third-party connectors, or continuous unattended jobs. Never trust a claimed completion without checking the result.
+**It has NOT yet been published as a working cloud service.** Before real use it needs secure hosting, persistent encrypted storage, an isolated browser sandbox, a private HTTPS URL, and a funded AI provider. It also needs end-to-end testing against real sites on actual iPad and phone devices.
 
-### AI cost choices
+See [Cross-device architecture and deployment requirements](docs/CROSS-DEVICE.md).
 
-**OpenAI API:** Paid separately from your ChatGPT subscription. You enter an API key in the app. Set a usage budget in your API account.
+## Security and costs
 
-**Local Ollama:** Install [Ollama for Windows](https://ollama.com/download/windows), open it, and click **Download AI model** in Work-Mode's AI Settings. The download is several gigabytes and adequate PC memory is required. Work-Mode displays the download progress, and you can cancel it. The default local Qwen3 model is text-only: it operates from webpage controls and verification, while screenshots are shown to you. It cannot visually analyze screenshots automatically. Local AI may be substantially less reliable on complex sites.
+Only run hosted mode on a protected HTTPS address with strong, privately configured host secrets. The browser may contain sensitive signed-in website sessions; do not expose it publicly. A screenshot is not proof that a site action completed. High-impact agent clicks require approval. The current prototype is intended for one trusted owner, not multiple accounts.
 
-Neither uses ChatGPT Work credits. Building the Windows installer with GitHub Actions is separate from Railway; **Railway is not required for the desktop app**.
+Remote browsing and AI calls require a cloud computer and AI provider. There is no legitimate way to guarantee unlimited cost-free cloud use. Usage limits and browser security need verification before business use.
 
-### Safety & privacy
+## Development
 
-- The local HTTP backend binds only to `127.0.0.1`.
-- Browser cookies are stored locally under your Windows profile; passwords and verification codes should be entered by you in the browser, not into agent chat.
-- App AI keys and history are stored on the computer, never in this public source repository.
-- The desktop shell does not grant webpage Node.js access, and links open in the system browser.
-- Work-Mode does not install a browser extension, spy on your normal tabs, or access unrelated computer files.
-- No legitimate automated browser agent can guarantee safe or correct execution on every website. Use approvals and supervise financial or account changes.
+Install Node 22+ and dependencies with `npm install`; the local-only application runs using `npm start` and the existing Windows version builds with `npm run desktop:build`.
 
-## For developers
+For cloud experimentation, `WORKMODE_CLOUD_MODE=1` requires `WORKMODE_CLOUD_ORIGIN` (exact HTTPS origin), `WORKMODE_CLOUD_PASSWORD` (16+ characters), `WORKMODE_SESSION_SECRET` (32+ characters), a private `OPENAI_API_KEY`, and a secure host providing TLS, persistent storage and Chromium sandbox support. Never commit these values to GitHub.
 
-Run locally from source with `npm install`, `npx playwright install chromium`, `npm start`, and visit `http://127.0.0.1:3168`. For desktop development, use `npm run desktop` after installing dependencies; the packaged Windows desktop variant uses the installed Microsoft Edge channel.
-
-Build an unsigned Windows installer on Windows with `npm run desktop:build`. The repository workflow `.github/workflows/windows-installer.yml` builds the same installer on GitHub's Windows runner and publishes its verified executable to GitHub Releases.
-
-## Legacy project boundaries
-
-This repository is new and independent. Auto-Coder remains separate and untouched. We reviewed BryanTheBrain, CloneAI, Genesis Loop, Mirror-OS, and Phone Super Assistant for reusable ideas. They have not been deleted. See [legacy review](docs/LEGACY-REVIEW.md).
-
-Copyright © Work-Mode. Early testing release.
+Do not enable automatic production deployment just because this code builds: security and real-device integration tests are mandatory.

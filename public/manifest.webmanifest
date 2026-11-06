@@ -1,0 +1,19 @@
+{
+  "name": "Work-Mode — Your Browser Assistant",
+  "short_name": "Work-Mode",
+  "description": "Your personal AI browser assistant, available on any device with access to your private Work-Mode service.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#111218",
+  "theme_color": "#111218",
+  "icons": [
+    {
+      "src": "/icons/work-mode.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
