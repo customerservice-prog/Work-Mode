@@ -6,7 +6,7 @@
 
 Open a chat page on your Windows computer, describe what you want done on a website, and watch Work-Mode use its own visible browser. It can navigate, inspect page controls, click, type and scroll. It records actions and shows screenshots. Sensitive clicks require your approval. It does **not** turn regular ChatGPT into Work and it does not use ChatGPT Work credits.
 
-**Project status: initial MVP / not production-ready.** The browser runner has not yet been tested against your Google Voice account or other authenticated sites. It uses a **separate browser profile**, so you sign in there once yourself. It does not import existing Edge/Chrome sessions.
+**Project status: advanced local-browser MVP / not production-ready.** The browser runner has not yet been tested against your Google Voice account or other authenticated sites. It uses a **separate browser profile**, so you sign in there once yourself. It does not import existing Edge/Chrome sessions.
 
 ## Use on Windows
 
@@ -17,6 +17,14 @@ Open a chat page on your Windows computer, describe what you want done on a webs
 5. Double-click `start-windows.cmd`, open **http://127.0.0.1:3168**, and choose **Open Browser**. Sign in yourself to sites in that window, then give the agent a task.
 
 The agent only runs while the local app is open. Keep the command window open.
+
+### Browser operator upgrade
+
+- Multiple tab listing, switching, and opening; back navigation and keyboard/dropdown controls.
+- Concrete page verification instead of assuming a click proves success.
+- Private-network URL blocks and a local-only API.
+- Local task history and a way to continue earlier tasks.
+- Automated safety and browser smoke tests.
 
 ### Costs
 Local software and Playwright are free; OpenAI API model calls are metered. Budgeting/limits are controlled through your OpenAI API account. This project has its own per-task action limit (`MAX_STEPS`) but that does **not** guarantee a fixed dollar amount.
@@ -40,10 +48,11 @@ Local software and Playwright are free; OpenAI API model calls are metered. Budg
 
 ## What still needs work
 - Automated tests and a verified Windows install
-- Robust handling of every website, tabs, popups and complex applications
+- Robust handling of every website, multi-step authentication, popups, captchas, and complex applications
 - More complete confirmations, domain/URL security policies and audit logs
 - Better error recovery, persistent task history, lower-cost local models
 - No direct integration with this ChatGPT conversation yet
+- Full computer control, recurring tasks, connected apps and the broader range of ChatGPT Work functions are not implemented
 
 ## Source-project consolidation
 

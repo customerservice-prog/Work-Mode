@@ -54,6 +54,12 @@ textarea:focus{border-color:#9db9e4}
 .notice{font-size:11px;color:#999eae;padding:0 3px}
 @media(max-width:1050px){.shell{grid-template-columns:1fr}.side{border-right:0;border-bottom:1px solid #30323c;flex-direction:row;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:15px 20px}.side .smallbox,.side .kicker,.side .hint{display:none}.columns{grid-template-columns:1fr;min-height:0}.main{padding:20px}}
 @media(max-width:600px){.top{flex-direction:column;align-items:flex-start}.top h1{font-size:23px}.columns{gap:15px}.panel{min-height:350px}.chat{padding:15px}.main{padding:14px}}
+.tabbar{display:flex;gap:6px;overflow-x:auto;min-height:45px;padding:7px 10px;border-bottom:1px solid #303340;align-items:center}
+.tab{flex-shrink:0;max-width:205px;background:#252834;color:#aab1c5;font-size:11px;border:1px solid #343746;border-radius:8px;padding:6px 9px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tab.active{background:#334259;color:#f1f5ff;border-color:#5876aa}
+.historyItem{display:block;text-align:left;background:transparent;width:100%;font-size:12px;white-space:normal;border:0;border-bottom:1px solid #343746;border-radius:0;padding:8px 2px;line-height:1.5}
+.historyItem:hover{background:#292d39}.historyItem span{color:#8e9aaf;font-size:11px;display:block}
+@media(max-width:1050px){.recent{display:none}}
 </style>
 </head>
 <body>
@@ -63,6 +69,7 @@ textarea:focus{border-color:#9db9e4}
   <div class="kicker">Your local assistant</div>
   <div class="smallbox"><span class="dot" id="statusDot"></span><strong id="stateLabel">Checking...</strong><div class="hint" id="stateDetails">Connect your own browser to begin.</div></div>
   <p class="hint">Your browser stays on your computer. You approve sensitive actions before they happen. This uses the OpenAI API, not Work credits.</p>
+  <div class="recent"><div class="kicker" style="margin-bottom:10px">Recent tasks</div><div id="historyList" class="hint">Loading local history...</div></div>
 </aside>
 <main class="main">
  <div class="top">
@@ -83,7 +90,8 @@ textarea:focus{border-color:#9db9e4}
    </div>
   </section>
   <section class="panel">
-   <div class="paneltitle">Live browser preview <span style="font-weight:400;color:#8895ab">· visible local window</span></div>
+   <div class="paneltitle">Live browser preview <span style="font-weight:400;color:#8895ab">· visible local window</span> <button id="refreshPreview" class="ghost" style="float:right;padding:4px 9px">Refresh</button></div>
+   <div id="tabbar" class="tabbar"><span class="hint">Browser tabs appear here.</span></div>
    <div class="preview empty" id="preview"><p id="emptyPreview">Open Browser to launch your automation browser and sign in if needed.</p><img id="screen" alt="Most recent Work-Mode browser screenshot"></div>
    <div class="urlbar" id="browserUrl">No browser page yet</div>
    <div class="paneltitle">Activity &amp; verification</div>
@@ -95,5 +103,6 @@ textarea:focus{border-color:#9db9e4}
 </main>
 </div>
 <script src="/app.js" defer></script>
+<script src="/extra.js" defer></script>
 </body>
 </html>

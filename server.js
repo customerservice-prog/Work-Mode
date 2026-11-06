@@ -6,28 +6,37 @@ import net from 'node:net';
 import fs from 'node:fs/promises';
 import { chromium } from 'playwright';
 import OpenAI from 'openai';
+import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretField, assertLocalRequest, redactForLog } from './lib/safety.js';
+import { recordTask, listHistory, historyEntry } from './lib/history.js';
 
 const app = express();
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
-const MAX_STEPS = Math.min(40, Math.max(2, Number(process.env.MAX_STEPS) || 20));
+const MAX_STEPS = Math.min(80, Math.max(2, Number(process.env.MAX_STEPS) || 40));
 const DATA_ROOT = path.join(os.homedir(), '.work-mode');
 const BROWSER_DIR = path.join(DATA_ROOT, 'browser-profile');
 const HIGH_IMPACT = /\b(pay|purchase|buy|checkout|order|charge|refund|transfer|withdraw|delete|remove|release|unassign|assign|publish|post|send|submit|save|update|confirm|subscribe|cancel|sign|invite|archive|disable|close account|accept|agree|authorize)\b/i;
-const SESSION = { busy: false, phase: 'idle', task: '', answer: '', logs: [], imageVersion: 0, approval: null };
+const SESSION = { busy: false, phase: 'idle', task: '', answer: '', logs: [], imageVersion: 0, approval: null, steps: 0, startedAt: '' };
 let context = null;
 let activePage = null;
 let latestImage = null;
 let pending = null;
 let stopped = false;
+let snapshotRevision = 0;
+const boundPages = new WeakSet();
 const eventClients = new Set();
 
 app.disable('x-powered-by');
+app.use((req, res, next) => {
+  try { assertLocalRequest(req); next(); }
+  catch (err) { res.status(403).json({ error: String(err.message || err) }); }
+});
 app.use(express.json({ limit: '100kb' }));
 app.use(express.static(path.join(process.cwd(), 'public'), { dotfiles: 'deny' }));
 
 function notify(type, data = {}) {
   const event = { type, ...data, at: new Date().toISOString() };
   if (type === 'log') {
+    event.message = redactForLog(event.message);
     SESSION.logs.push(event);
     if (SESSION.logs.length > 150) SESSION.logs.shift();
   }
@@ -36,13 +45,17 @@ function notify(type, data = {}) {
     try { client.write(message); } catch { eventClients.delete(client); }
   }
 }
-function log(text) { notify('log', { message: String(text).slice(0, 1000) }); }
+function log(text) { notify('log', { message: redactForLog(text).slice(0, 1000) }); }
 function exposeState() {
   return { ...SESSION, browserUrl: activePage && !activePage.isClosed() ? activePage.url() : null, hasBrowser: Boolean(context) };
 }
 function attachPage(page) {
   activePage = page;
+  if (boundPages.has(page)) return;
+  boundPages.add(page);
   page.setDefaultTimeout(15000);
+  page.on('load', () => { if (page === activePage) void refreshImage(); });
+  page.on('close', () => { if (page === activePage) activePage = context?.pages().find(p => !p.isClosed()) || null; });
   page.on('dialog', async dialog => {
     log('Browser dialog dismissed for safety: ' + dialog.type());
     await dialog.dismiss().catch(() => {});
@@ -56,30 +69,22 @@ async function ensureBrowser() {
       viewport: { width: 1200, height: 820 },
       acceptDownloads: false
     });
+    // A persistent profile stores cookies only on this computer, never in GitHub.
+    await context.route('**/*', async route => {
+      try {
+        const requested = route.request();
+        if (requested.isNavigationRequest()) await assertPublicNavigation(requested.url());
+        else assertPublicUrl(requested.url());
+        await route.continue();
+      } catch {
+        await route.abort('blockedbyclient').catch(() => {});
+      }
+    });
     context.on('page', attachPage);
     context.on('close', () => { context = null; activePage = null; log('Browser closed'); });
   }
   if (!activePage || activePage.isClosed()) attachPage(context.pages().at(-1) || await context.newPage());
   return activePage;
-}
-function safeUrl(raw) {
-  const url = new URL(raw);
-  if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Only normal http(s) URLs without embedded passwords are allowed');
-  const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  if (['localhost', 'metadata', 'metadata.google.internal'].includes(host) || host.endsWith('.local') || host.endsWith('.internal')) {
-    throw new Error('Local/internal addresses are blocked');
-  }
-  const kind = net.isIP(host);
-  if (kind === 4) {
-    const parts = host.split('.').map(Number);
-    if (parts[0] === 0 || parts[0] === 10 || parts[0] === 127 || parts[0] >= 224 ||
-      (parts[0] === 169 && parts[1] === 254) || (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
-      (parts[0] === 192 && parts[1] === 168) || (parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127)) {
-      throw new Error('Private/internal IP addresses are blocked');
-    }
-  }
-  if (kind === 6 && (/^(::1|::|fc|fd|fe80)/.test(host))) throw new Error('Private/internal IP addresses are blocked');
-  return url.href;
 }
 async function refreshImage() {
   if (!activePage || activePage.isClosed()) return;
@@ -93,15 +98,18 @@ async function refreshImage() {
 }
 async function readPage() {
   const page = await ensureBrowser();
-  const summary = await page.evaluate(() => {
+  const revision = ++snapshotRevision;
+  const summary = await page.evaluate((revision) => {
     let index = 0;
     const nodes = Array.from(document.querySelectorAll('a,button,input,textarea,select,[role="button"],[contenteditable="true"]'));
     const controls = [];
     for (const el of nodes) {
       const rect = el.getBoundingClientRect();
       if (!rect.width || !rect.height || getComputedStyle(el).visibility === 'hidden') continue;
+      if (rect.bottom < 0 || rect.top > innerHeight || rect.right < 0 || rect.left > innerWidth) continue;
       const id = String(++index);
       el.setAttribute('data-workmode-id', id);
+      el.setAttribute('data-workmode-snapshot', String(revision));
       const label = (el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || el.getAttribute('title') || '').trim();
       const rawType = (el.getAttribute('type') || '').toLowerCase();
       controls.push({
@@ -113,12 +121,13 @@ async function readPage() {
       if (controls.length >= 120) break;
     }
     return {
+      revision,
       title: document.title,
       url: location.href,
       text: (document.body?.innerText || '').slice(0, 13500),
       controls
     };
-  });
+  }, revision);
   return summary;
 }
 function elementId(raw) {
@@ -128,8 +137,8 @@ function elementId(raw) {
 }
 async function getElement(id) {
   const page = await ensureBrowser();
-  const element = page.locator('[data-workmode-id="' + elementId(id) + '"]').first();
-  if (!(await element.count())) throw new Error('Element is not available. Run read_page again.');
+  const element = page.locator('[data-workmode-id="' + elementId(id) + '"][data-workmode-snapshot="' + snapshotRevision + '"]').first();
+  if (!(await element.count())) throw new Error('Element is stale or no longer available. Run read_page again.');
   return element;
 }
 async function requestApproval(label) {
@@ -159,11 +168,101 @@ const browserTools = [
   { type: 'function', name: 'scroll_page', description: 'Scroll the visible page up or down.', strict: true, parameters: { type: 'object', properties: { direction: { type: 'string', enum: ['up', 'down'] } }, required: ['direction'], additionalProperties: false } },
   { type: 'function', name: 'inspect_visual', description: 'Look at an actual screenshot of the current page. Use to verify important outcomes and discover visual problems.', strict: true, parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } }
 ];
+
+browserTools.push(
+  { type: 'function', name: 'list_tabs', description: 'List open tabs in the Work-Mode browser, including titles and URLs.', strict: true, parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } },
+  { type: 'function', name: 'switch_tab', description: 'Switch to a tab using its zero-based index from list_tabs.', strict: true, parameters: { type: 'object', properties: { index: { type: 'integer' } }, required: ['index'], additionalProperties: false } },
+  { type: 'function', name: 'open_tab', description: 'Open a new tab at a public web URL.', strict: true, parameters: { type: 'object', properties: { url: { type: 'string' } }, required: ['url'], additionalProperties: false } },
+  { type: 'function', name: 'go_back', description: 'Return to the previous page in the active tab.', strict: true, parameters: { type: 'object', properties: {}, required: [], additionalProperties: false } },
+  { type: 'function', name: 'press_key', description: 'Press one allowed key (Enter requires approval, for safety).', strict: true, parameters: { type: 'object', properties: { key: { type: 'string', enum: ['Tab', 'Enter', 'Escape', 'ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', 'Home', 'End'] } }, required: ['key'], additionalProperties: false } },
+  { type: 'function', name: 'select_option', description: 'Choose an option in a select menu by its visible label. Requires an id from read_page.', strict: true, parameters: { type: 'object', properties: { id: { type: 'string' }, label: { type: 'string' } }, required: ['id', 'label'], additionalProperties: false } },
+  { type: 'function', name: 'wait', description: 'Wait briefly for a page to finish changing; maximum 10 seconds.', strict: true, parameters: { type: 'object', properties: { milliseconds: { type: 'integer' } }, required: ['milliseconds'], additionalProperties: false } },
+  { type: 'function', name: 'verify_page', description: 'Check a concrete page condition after doing an action. Returns verified true or false. Use this instead of assuming completion.', strict: true, parameters: { type: 'object', properties: { kind: { type: 'string', enum: ['text', 'url', 'title'] }, expected: { type: 'string' } }, required: ['kind', 'expected'], additionalProperties: false } }
+);
 async function executeTool(name, args) {
   const page = await ensureBrowser();
   if (stopped) throw new Error('Task stopped by user');
+
+  if (name === 'list_tabs') {
+    const tabs = context.pages().filter(p => !p.isClosed());
+    return { tabs: await Promise.all(tabs.map(async (p, i) => ({
+      index: i, title: (await p.title().catch(() => '')).slice(0, 150),
+      url: p.url(), active: p === activePage
+    }))) };
+  }
+  if (name === 'switch_tab') {
+    const tabs = context.pages().filter(p => !p.isClosed());
+    if (!Number.isInteger(args.index) || args.index < 0 || args.index >= tabs.length) throw new Error('Invalid tab index. Call list_tabs first.');
+    attachPage(tabs[args.index]);
+    await activePage.bringToFront();
+    snapshotRevision++;
+    await refreshImage();
+    log('Switched to tab ' + args.index + ': ' + activePage.url());
+    return { ok: true, url: activePage.url() };
+  }
+  if (name === 'open_tab') {
+    const target = await assertPublicNavigation(args.url);
+    const newPage = await context.newPage();
+    attachPage(newPage);
+    await newPage.goto(target, { waitUntil: 'domcontentloaded', timeout: 35000 });
+    await newPage.bringToFront();
+    await refreshImage();
+    log('Opened new tab: ' + newPage.url());
+    return { ok: true, url: newPage.url() };
+  }
+  if (name === 'go_back') {
+    await page.goBack({ waitUntil: 'domcontentloaded', timeout: 25000 });
+    snapshotRevision++;
+    await refreshImage();
+    log('Went back to ' + page.url());
+    return { ok: true, url: page.url() };
+  }
+  if (name === 'press_key') {
+    const key = String(args.key);
+    if (!['Tab','Enter','Escape','ArrowDown','ArrowUp','PageDown','PageUp','Home','End'].includes(key)) throw new Error('Key is not allowed');
+    if (key === 'Enter') {
+      const allowed = await requestApproval('Press Enter on ' + page.url() + ' (this may submit a form)');
+      if (!allowed) return { ok: false, approval: 'denied_or_timed_out' };
+    }
+    await page.keyboard.press(key);
+    log('Pressed ' + key);
+    await refreshImage();
+    return { ok: true };
+  }
+  if (name === 'select_option') {
+    const element = await getElement(args.id);
+    const meta = await element.evaluate(el => ({
+      label: (el.getAttribute('aria-label') || el.closest('label')?.innerText || '').slice(0, 200),
+      formText: (el.closest('form')?.innerText || '').slice(0, 200)
+    }));
+    if (isHighImpactAction(meta)) {
+      const allowed = await requestApproval('Change selection in "' + meta.label + '" on ' + page.url());
+      if (!allowed) return { ok: false, approval: 'denied_or_timed_out' };
+    }
+    await element.selectOption({ label: String(args.label).slice(0, 200) });
+    log('Selected an option in a dropdown');
+    await refreshImage();
+    return { ok: true };
+  }
+  if (name === 'wait') {
+    const ms = Math.min(10000, Math.max(0, Number(args.milliseconds) || 1000));
+    await page.waitForTimeout(ms);
+    await refreshImage();
+    return { ok: true, waitedMilliseconds: ms };
+  }
+  if (name === 'verify_page') {
+    const kind = String(args.kind || '');
+    const expected = String(args.expected || '').trim().slice(0, 200);
+    if (!expected) throw new Error('Provide a concrete expected value');
+    const actual = kind === 'url' ? page.url() : kind === 'title' ? await page.title() :
+      kind === 'text' ? await page.locator('body').innerText({ timeout: 12000 }) : '';
+    if (!['url','title','text'].includes(kind)) throw new Error('Invalid verification kind');
+    const verified = actual.toLowerCase().includes(expected.toLowerCase());
+    log('Verified page ' + kind + ' condition: ' + (verified ? 'PASS' : 'FAIL'));
+    return { verified, kind, expected, observedExcerpt: actual.slice(0, 700), url: page.url() };
+  }
   if (name === 'navigate') {
-    const url = safeUrl(args.url);
+    const url = await assertPublicNavigation(args.url);
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 35000 });
     log('Navigated to ' + page.url());
     await refreshImage();
@@ -175,9 +274,12 @@ async function executeTool(name, args) {
     const meta = await element.evaluate(el => ({
       tag: el.tagName.toLowerCase(),
       label: (el.getAttribute('aria-label') || el.innerText || el.getAttribute('value') || el.getAttribute('title') || '').trim().slice(0, 160),
-      type: (el.getAttribute('type') || '').toLowerCase()
+      type: (el.getAttribute('type') || '').toLowerCase(),
+      title: el.getAttribute('title') || '',
+      formText: (el.closest('form')?.innerText || '').slice(0, 220),
+      href: el.getAttribute('href') || ''
     }));
-    if (meta.type === 'submit' || HIGH_IMPACT.test(meta.label)) {
+    if (isHighImpactAction(meta)) {
       const allowed = await requestApproval('Click "' + (meta.label || meta.type) + '" on ' + page.url());
       if (!allowed) return { ok: false, approval: 'denied_or_timed_out', action: meta.label };
     }
@@ -191,9 +293,11 @@ async function executeTool(name, args) {
     const meta = await element.evaluate(el => ({
       type: (el.getAttribute('type') || '').toLowerCase(),
       name: (el.getAttribute('name') || '').toLowerCase(),
-      auto: (el.getAttribute('autocomplete') || '').toLowerCase()
+      auto: (el.getAttribute('autocomplete') || '').toLowerCase(),
+      label: el.getAttribute('aria-label') || '',
+      placeholder: el.getAttribute('placeholder') || ''
     }));
-    if (/password|passcode|otp|one.time|verification|credit.card|cc-number|cvc|cvv|security.code/.test(meta.type + ' ' + meta.name + ' ' + meta.auto)) {
+    if (isSecretField(meta)) {
       throw new Error('Credentials, verification codes and payment credentials must be entered manually in the browser');
     }
     if (String(args.text).length > 4000) throw new Error('Input exceeds 4000 characters');
@@ -227,11 +331,16 @@ const POLICY = [
   'High-impact actions require user approval; never work around a denial.',
   'Never request or type passwords, OTP codes, API keys, credit-card fields or private secrets. Ask user to do these directly in the browser.',
   'Do not claim success just because an action was attempted. If a task is incomplete, say precisely what remains.',
-  'Use inspect_visual to ground visual conclusions; do not guess from page text alone.',
+  'Use inspect_visual and verify_page to ground conclusions; do not guess from page text alone.',
+  'You may work across multiple tabs. Use list_tabs before switch_tab. Do not repeatedly ask the user to click for you.',
+  'When a site requires authentication, ask the user to sign in directly in the visible browser and then give a follow-up task.',
   'The agent can only control its own Playwright browser, not the user existing Edge or Chrome tabs.'
 ].join('\n');
 async function runTask(task) {
   SESSION.busy = true;
+  SESSION.steps = 0;
+  SESSION.startedAt = new Date().toISOString();
+  SESSION.logs = [];
   SESSION.phase = 'running';
   SESSION.task = task;
   SESSION.answer = '';
@@ -260,7 +369,8 @@ async function runTask(task) {
       for (const call of calls) {
         if (stopped) throw new Error('Stopped by user');
         const args = JSON.parse(call.arguments || '{}');
-        log('Action ' + (step + 1) + ': ' + call.name);
+        SESSION.steps++;
+        log('Action ' + SESSION.steps + ': ' + call.name);
         let result;
         let image;
         try {
@@ -281,7 +391,7 @@ async function runTask(task) {
         });
       }
       response = await client.responses.create({
-        model, previous_response_id: response.id, input: inputs,
+        model, previous_response_id: response.id, instructions: POLICY, input: inputs,
         tools: browserTools, parallel_tool_calls: false
       });
     }
@@ -292,11 +402,58 @@ async function runTask(task) {
     SESSION.answer = String(err.message || err).slice(0, 900);
     log('Task ' + SESSION.phase + ': ' + SESSION.answer);
   } finally {
+    try { await recordTask({ task, phase: SESSION.phase, answer: SESSION.answer,
+      steps: SESSION.steps, startedAt: SESSION.startedAt, actions: SESSION.logs }); }
+    catch (err) { log('Could not save local history: ' + String(err.message || err)); }
     SESSION.busy = false;
     if (pending) pending.resolve(false);
     notify('status', { phase: SESSION.phase, answer: SESSION.answer });
   }
 }
+
+
+app.get('/api/history', async (_req, res) => {
+  try { res.json({ history: await listHistory() }); }
+  catch (err) { res.status(500).json({ error: 'Could not load task history' }); }
+});
+app.get('/api/history/:id', async (req, res) => {
+  try {
+    const item = await historyEntry(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Task was not found' });
+    res.json(item);
+  } catch { res.status(500).json({ error: 'Could not load the task' }); }
+});
+app.get('/api/tabs', async (_req, res) => {
+  if (!context) return res.json({ tabs: [] });
+  const tabs = context.pages().filter(p => !p.isClosed());
+  res.json({ tabs: await Promise.all(tabs.map(async (p, index) => ({
+    index, url: p.url(), title: (await p.title().catch(() => '')).slice(0, 100),
+    active: p === activePage
+  }))) });
+});
+app.post('/api/tabs/select', async (req, res) => {
+  if (SESSION.busy) return res.status(409).json({ error: 'Stop the running task before manually switching tabs' });
+  try { res.json(await executeTool('switch_tab', { index: req.body.index })); }
+  catch (err) { res.status(400).json({ error: String(err.message || err) }); }
+});
+app.post('/api/browser/refresh', async (_req, res) => {
+  try {
+    await ensureBrowser();
+    await refreshImage();
+    res.json({ ok: true, version: SESSION.imageVersion, url: activePage.url() });
+  } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
+});
+app.post('/api/browser/new', async (_req, res) => {
+  if (SESSION.busy) return res.status(409).json({ error: 'Stop the running task before opening a new tab manually' });
+  try {
+    await ensureBrowser();
+    const page = await context.newPage();
+    attachPage(page);
+    await page.bringToFront();
+    await refreshImage();
+    res.json({ ok: true, url: page.url() });
+  } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
+});
 
 app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'Work-Mode', local: true }));
 app.get('/api/status', (_req, res) => res.json(exposeState()));

@@ -12,9 +12,14 @@ jobs:
           node-version: '22'
       - name: Install dependencies
         run: npm install --no-audit --no-fund
+      - name: Install Chromium for browser test
+        run: npx playwright install --with-deps chromium
       - name: Syntax checks
         run: |
           node --check server.js
           node --check public/app.js
+          node --check public/extra.js
+          node --check lib/safety.js
+          node --check lib/history.js
       - name: Local server smoke test
         run: npm test
