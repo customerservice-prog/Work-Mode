@@ -51,7 +51,10 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
       : null;
     const result = {
       id: 'resp_' + count, object: 'response', status: 'completed',
-      output: answer ? [answer] : [], output_text: 'Verified the test page successfully.', model: 'test-mock', usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 }
+      output: answer ? [answer] : [{
+        id: 'msg_' + count, type: 'message', role: 'assistant', status: 'completed',
+        content: [{ type: 'output_text', text: 'Verified the test page successfully.', annotations: [] }]
+      }], model: 'test-mock', usage: { input_tokens: 100, output_tokens: 50, total_tokens: 150 }
     };
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result));
