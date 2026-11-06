@@ -1,7 +1,7 @@
 name: Build Work-Mode Windows installer
 on:
   push:
-    branches: [main, feature/low-spec-windows-all-in-one]
+    branches: [feature/low-spec-windows-all-in-one]
     paths:
       - 'desktop/**'
       - 'server.js'
@@ -92,15 +92,8 @@ jobs:
           if ((Get-Item "dist/win-unpacked/resources/models/Qwen3-0.6B-Q4_K_M.gguf").Length -lt 350000000) { throw "Lite AI model is missing" }
           if ((Get-Item "dist/win-unpacked/resources/models/Qwen3-1.7B-Q4_K_M.gguf").Length -lt 1200000000) { throw "Standard AI model is missing" }
           Write-Host "Verified $($installer[0].Name) ($([math]::Round($installer[0].Length/1MB, 1)) MB)"
-      - name: Attach installer as downloadable GitHub Actions artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Work-Mode-Desktop-Windows-Setup
-          path: dist/Work-Mode-Setup-*.exe
-          retention-days: 30
-          if-no-files-found: error
       - name: Publish installer to GitHub Releases
-        if: github.ref == 'refs/heads/main'
+        if: false
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,64 @@
+name: Publish tested Work-Mode 0.4.0 installer
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/publish-tested-installer.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      VERIFIED_BUILD_RUN: '42313796159'
+      VERIFIED_BUILD_SHA: '1758143f595a34a9e78e23ccfd2618f410579e51'
+    steps:
+      - name: Verify earlier Windows build passed and came from expected source
+        run: |
+          set -euo pipefail
+          result="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_BUILD_RUN" --jq '.conclusion')"
+          head="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$VERIFIED_BUILD_RUN" --jq '.head_sha')"
+          test "$result" = "success" || { echo "Windows build has not passed"; exit 1; }
+          test "$head" = "$VERIFIED_BUILD_SHA" || { echo "Installer source commit differs"; exit 1; }
+      - name: Download verified installer artifact
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          gh run download "$VERIFIED_BUILD_RUN" --repo "$GITHUB_REPOSITORY" --name Work-Mode-Desktop-Windows-Setup --dir release
+          test -f release/Work-Mode-Setup-0.4.0-x64.exe
+          bytes="$(stat -c%s release/Work-Mode-Setup-0.4.0-x64.exe)"
+          test "$bytes" -ge 1500000000 || { echo "Installer unexpectedly small"; exit 1; }
+          test "$bytes" -le 2147483648 || { echo "Installer too large for release"; exit 1; }
+          sha256sum release/Work-Mode-Setup-0.4.0-x64.exe
+      - name: Publish versioned Windows installer
+        run: |
+          set -euo pipefail
+          cat > release-notes.txt <<'NOTES'
+          Work-Mode Desktop v0.4.0 — all-in-one offline preview for Windows x64
+
+          - Install once using Work-Mode-Setup-0.4.0-x64.exe.
+          - No Ollama, separate model installation, or AI API key required for offline mode.
+          - Includes llama.cpp, Qwen3 0.6B Lite and Qwen3 1.7B Standard models. The app automatically selects by installed RAM.
+          - The installer is large because both local AI models are included.
+          - Small Windows screens supported; operates a separate Microsoft Edge browser.
+          - Optional OpenAI API use is separately billed, not required for offline mode.
+
+          IMPORTANT: Small models are much less capable than ChatGPT Work and may be slow, inaccurate, or unable to finish complex website tasks. Review actions; never assume unverified completion. About 4 GB RAM or more recommended. Computers under 3.5 GB cannot start the built-in AI.
+
+          This unsigned prerelease may display a Windows publisher warning. Only install the file from this repository's Releases page. The Windows build passed real packaged-app startup and offline AI response tests.
+          NOTES
+          if gh release view v0.4.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v0.4.0 already exists; refusing to overwrite an installer."
+            exit 0
+          fi
+          gh release create v0.4.0 "release/Work-Mode-Setup-0.4.0-x64.exe" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Work-Mode Desktop v0.4.0 — Built-in AI for Windows" --notes-file release-notes.txt --prerelease
+      - name: Confirm published installer
+        run: |
+          set -euo pipefail
+          gh release view v0.4.0 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[] | select(.name=="Work-Mode-Setup-0.4.0-x64.exe") | .name'
