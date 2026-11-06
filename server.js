@@ -11,6 +11,8 @@ import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretFi
 import { recordTask, listHistory, historyEntry } from './lib/history.js';
 import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
 import { detectOllama, pullOllama } from './lib/local-ai.js';
+import { startEmbeddedAI, stopEmbeddedAI, runtimeStatus, scheduleIdleRelease } from './lib/embedded-runtime.js';
+import { runEmbeddedAgent } from './lib/embedded-agent.js';
 
 const app = express();
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
@@ -29,6 +31,7 @@ let stopped = false;
 let snapshotRevision = 0;
 const boundPages = new WeakSet();
 const eventClients = new Set();
+scheduleIdleRelease({ isBusy: () => SESSION.busy });
 const localAIBase = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_OLLAMA_BASEURL ? process.env.WORKMODE_TEST_OLLAMA_BASEURL : undefined;
 let modelPull = null;
 let modelPullState = { running: false, status: 'idle', percent: null, error: null };
@@ -144,11 +147,15 @@ async function readPage() {
       el.setAttribute('data-workmode-snapshot', String(revision));
       const label = (el.getAttribute('aria-label') || el.innerText || el.getAttribute('placeholder') || el.getAttribute('title') || '').trim();
       const rawType = (el.getAttribute('type') || '').toLowerCase();
+      const sensitive = /\b(pass(word|code)?|one.?time|otp|verification|2fa|mfa|security.?code|credit.?card|debit.?card|card.?number|cvc|cvv|routing.?number|account.?number|social.?security|ssn|api.?key|access.?token|auth.?token|secret|private.?key)\b/i.test([
+        rawType, el.getAttribute('name'),el.getAttribute('id'),
+        el.getAttribute('autocomplete'),label,el.getAttribute('placeholder')
+      ].filter(Boolean).join(' '));
       controls.push({
         id, tag: el.tagName.toLowerCase(), type: rawType,
         label: label.slice(0, 150),
         href: el.tagName.toLowerCase() === 'a' ? (el.href || '').slice(0, 250) : undefined,
-        value: ['password', 'hidden'].includes(rawType) ? '[redacted]' : String(el.value || '').slice(0, 90)
+        value: sensitive || ['password', 'hidden'].includes(rawType) ? '[redacted]' : String(el.value || '').slice(0, 90)
       });
       if (controls.length >= 120) break;
     }
@@ -305,7 +312,7 @@ async function executeTool(name, args) {
     const element = await getElement(args.id);
     const meta = await element.evaluate(el => ({
       tag: el.tagName.toLowerCase(),
-      label: (el.getAttribute('aria-label') || el.innerText || el.getAttribute('value') || el.getAttribute('title') || '').trim().slice(0, 160),
+      label: (el.getAttribute('aria-label') || el.innerText || (el.tagName.toLowerCase()==='button' ? el.getAttribute('value') : '') || el.getAttribute('title') || '').trim().slice(0, 160),
       type: (el.getAttribute('type') || '').toLowerCase(),
       title: el.getAttribute('title') || '',
       formText: (el.closest('form')?.innerText || '').slice(0, 220),
@@ -345,12 +352,12 @@ async function executeTool(name, args) {
     return { ok: true, direction: args.direction };
   }
   if (name === 'inspect_visual') {
-    const image = await page.screenshot({ type: 'jpeg', quality: 62, timeout: 15000 });
-    latestImage = image;
-    SESSION.imageVersion++;
-    notify('image', { version: SESSION.imageVersion, url: page.url() });
-    log('Inspected browser screenshot');
-    return { result: { ok: true, screenshotProvidedToModel: true, url: page.url() }, image };
+    const image = await page.screenshot({type:'jpeg',quality:62,timeout:15000,
+      mask:[page.locator('input, textarea, select, [contenteditable="true"]')],
+      maskColor:'#171c28'});
+    await refreshImage();
+    log('Inspected a screenshot with form-field values masked');
+    return {result:{ok:true,screenshotProvidedToModel:true,formValuesMasked:true,url:page.url()},image};
   }
   throw new Error('Unknown tool');
 }
@@ -380,6 +387,28 @@ async function runTask(task) {
   notify('status', { phase: SESSION.phase, task });
   try {
     const settings = await readSettings();
+    if (settings.provider === 'embedded') {
+      // The bundled model runs on demand, only when a task is submitted.
+      // It automatically selects Lite or Standard based on installed RAM.
+      const resourceRoot = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_RESOURCE_ROOT
+        ? path.resolve(process.env.WORKMODE_TEST_RESOURCE_ROOT)
+        : process.resourcesPath;
+      const connection = await startEmbeddedAI(resourceRoot);
+      await ensureBrowser();
+      const { model: modelId, ...clientOptions } = connection;
+      const client = new OpenAI(clientOptions);
+      const hardware = runtimeStatus().hardware;
+      const result = await runEmbeddedAgent({
+        client, model: modelId, task, tools: browserTools, policy: POLICY,
+        execute: executeTool, log, isStopped: () => stopped,
+        maxSteps: hardware.recommendedModel === 'lite' ? 12 : 18,
+        onStep: step => { SESSION.steps = step; }
+      });
+      SESSION.answer = result.answer;
+      SESSION.phase = result.limitReached || (result.usedTools && !result.verified) ? 'limited' : 'done';
+      log(result.verified ? 'Built-in AI recorded a passing page check.' : 'Built-in AI did not establish a verified final page condition.');
+      return;
+    }
     const useLocalAI = settings.provider === 'ollama';
     if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
@@ -517,6 +546,30 @@ app.post('/api/local-ai/cancel', (_req, res) => {
   res.json({ ok: true });
 });
 
+app.get('/api/built-in/status', (_req, res) => {
+  res.json(runtimeStatus());
+});
+app.post('/api/built-in/check', async (_req, res) => {
+  if (SESSION.busy) return res.status(409).json({ error:'A browser task is already running' });
+  try {
+    const resourceRoot = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_RESOURCE_ROOT
+      ? path.resolve(process.env.WORKMODE_TEST_RESOURCE_ROOT) : process.resourcesPath;
+    const connection=await startEmbeddedAI(resourceRoot);
+    const {model: modelId, ...clientOptions}=connection;
+    const client=new OpenAI(clientOptions);
+    const answer=await client.chat.completions.create({
+      model:modelId,
+      messages:[{role:'user',content:'Reply with the single word READY.'}],
+      max_tokens:60,temperature:0.1,
+      chat_template_kwargs:{enable_thinking:false}
+    });
+    const text=String(answer.choices?.[0]?.message?.content||'').trim();
+    if(!text)throw Error('Built-in AI started but did not produce a response');
+    res.json({ok:true,status:runtimeStatus(),sample:text.slice(0,80)});
+  }catch(err){
+    res.status(503).json({ok:false,error:String(err.message||err).slice(0,400),status:runtimeStatus()});
+  }
+});
 app.get('/api/settings', async (_req, res) => {
   try { res.json(await getPublicSettings()); }
   catch (err) { res.status(500).json({ error: String(err.message || err) }); }
@@ -625,6 +678,7 @@ export async function stopBrowser() {
   stopped = true;
   if (pending) pending.resolve(false);
   if (modelPull) modelPull.abort();
+  await stopEmbeddedAI();
   if (context) {
     const current = context;
     context = null;

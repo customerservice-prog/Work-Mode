@@ -1,59 +1,62 @@
-# Work-Mode — Windows Desktop Assistant
+# Work-Mode for Windows — self-contained offline edition
 
-**Work-Mode is your separate, local AI browser assistant.** It is not an official ChatGPT Work product. It lets you type instructions, watch a controlled browser, and approve high-impact actions.
+**This version is designed for an inexpensive Windows computer.** It is not ChatGPT Work or a feature-for-feature replacement.
 
-## Install it on your Windows desktop (no coding)
+## Install and use
 
-1. Open **[Work-Mode Releases](https://github.com/customerservice-prog/Work-Mode/releases)**.
-2. Download the file named **Work-Mode-Setup-0.3.0-x64.exe** (when the installer build appears).
-3. Double-click the downloaded **.exe** and follow Windows installation prompts.
-4. Open **Work-Mode** using the new desktop shortcut or Start menu.
-5. On first launch, Work-Mode opens **AI Settings**. Choose **Free local AI** or **OpenAI API**. For free mode, install and open Ollama for Windows using the link in the app, then click **Download AI model** in Work-Mode. No Terminal command is necessary.
-6. Click **Open Browser**. An Edge window opens; log in to the site yourself once, then tell Work-Mode what you want it to do.
+1. Open [Work-Mode Releases](https://github.com/customerservice-prog/Work-Mode/releases) and download **Work-Mode-Setup-0.4.0-x64.exe** when the new release appears.
+2. Install the Windows app. It creates a Work-Mode desktop shortcut.
+3. Open Work-Mode and type your instruction. **Built-in AI is already included**. You do not need Ollama, a model download, a terminal, GitHub commands, or an AI API key.
+4. Click **Open Browser** to control a separate Microsoft Edge window. Sign into websites yourself when needed.
+5. Review progress and approve consequential actions. Never assume an action succeeded unless verified.
 
-**That's it.** You do not need a code editor, Node.js, Railway, or terminal commands to use the installed desktop app. Only installation and AI setup in the app are required. The installer is built from this source using GitHub Actions.
+This Windows prerelease is **unsigned**, so Windows may display a publisher warning. Only run the installer downloaded from this repository's Releases page.
 
-The desktop installer is **not code-signed** yet and may trigger Windows SmartScreen. Do not run unexpected files from unverified publishers. Check that your download came from this exact repository and its Releases page. Early versions are prereleases and should be supervised.
+## What makes it suitable for lower-cost PCs
 
-### What the desktop app does
+- The installer contains a Windows CPU-only llama.cpp engine and **two small offline models**.
+- The application checks installed RAM automatically. Machines with under 7.5 GB use **Lite Qwen3 0.6B** (approximately 397 MB model); machines with at least 7.5 GB use **Standard Qwen3 1.7B** (approximately 1.28 GB model).
+- Below 3.5 GB of total RAM, the included AI will not start to avoid overloading Windows. Machines running out of *available* memory are asked to close other programs.
+- The AI starts only when you ask it to work and shuts down after about six minutes of inactivity to free RAM.
+- The desktop window fits smaller screens instead of requiring a large monitor.
+- A **Test included AI** self-test is available through the local application API to check that the packaged model actually generates a reply.
 
-- Opens a chat window on your computer.
-- Operates a **separate Microsoft Edge automation profile** using Playwright; this does not silently take over your normal signed-in Edge tabs.
-- Navigates sites, reads pages, clicks, types, scrolls, selects dropdown options, and switches tabs.
-- Keeps browser login cookies locally so you do not sign into the same site every session (where permitted).
-- Shows screenshots, actions, verification status, and task history.
-- Requires approval for potentially consequential actions (sending, deleting, purchasing, releasing phone numbers).
-- Allows stopping tasks and switching AI providers from **AI Settings**.
+**The new installer is substantially larger** because it includes both models and the engine. It is a one-install experience, not a zero-download experience.
 
-### What it cannot guarantee
+### Quality limitations
 
-This is an **early local-browser MVP**, not yet a complete ChatGPT Work replacement. Login challenges, CAPTCHAs, complex workflows and some websites may need manual help, and the app has not yet passed a real Google Voice end-to-end task. It does not provide remote cloud computer use, all third-party connectors, or continuous unattended jobs. Never trust a claimed completion without checking the result.
+A 0.6B or 1.7B offline model is substantially less capable than ChatGPT Work on complex websites. It may be slow on an older CPU, misunderstand site controls, or fail to follow multi-step instructions. It only uses webpage text and controls, not screenshot vision. Work-Mode must disclose when it cannot verify completion. Use it for simpler supervised tasks first.
 
-### AI cost choices
+### Optional more capable mode
 
-**OpenAI API:** Paid separately from your ChatGPT subscription. You enter an API key in the app. Set a usage budget in your API account.
+In **AI Settings**, choose **OpenAI API** and enter a separately billed API key if you want a stronger remote model. This is optional and **not included in the ChatGPT Plus subscription**. Set spending limits with the API provider.
 
-**Local Ollama:** Install [Ollama for Windows](https://ollama.com/download/windows), open it, and click **Download AI model** in Work-Mode's AI Settings. The download is several gigabytes and adequate PC memory is required. Work-Mode displays the download progress, and you can cancel it. The default local Qwen3 model is text-only: it operates from webpage controls and verification, while screenshots are shown to you. It cannot visually analyze screenshots automatically. Local AI may be substantially less reliable on complex sites.
+## Privacy and security
 
-Neither uses ChatGPT Work credits. Building the Windows installer with GitHub Actions is separate from Railway; **Railway is not required for the desktop app**.
+- Your browser and offline model run locally; the app's server binds only to 127.0.0.1.
+- Website credentials should be entered by you into the separate browser, not into AI chat.
+- Secret-looking form values are redacted in text snapshots, and form controls are masked in screenshots passed to a paid visual model.
+- Work-Mode requests approval before identified high-impact actions.
+- Browser sessions and task history stay on your PC.
+- The offline model server uses a randomized access key and loopback-only access.
+- The model is not authorized to perform unverified destructive actions on its own.
 
-### Safety & privacy
+## Developer notes
 
-- The local HTTP backend binds only to `127.0.0.1`.
-- Browser cookies are stored locally under your Windows profile; passwords and verification codes should be entered by you in the browser, not into agent chat.
-- App AI keys and history are stored on the computer, never in this public source repository.
-- The desktop shell does not grant webpage Node.js access, and links open in the system browser.
-- Work-Mode does not install a browser extension, spy on your normal tabs, or access unrelated computer files.
-- No legitimate automated browser agent can guarantee safe or correct execution on every website. Use approvals and supervise financial or account changes.
+The installer is produced by the Windows GitHub Actions workflow. The workflow downloads pinned, checksum-verified llama.cpp and GGUF model artifacts **during the build**, packages them through electron-builder `extraResources`, and performs a real local AI inference check against the packaged Windows app.
 
-## For developers
+The model weights and binary are not stored in the Git repository. `desktop-runtime/` is ignored and generated only during the Windows packaging job.
 
-Run locally from source with `npm install`, `npx playwright install chromium`, `npm start`, and visit `http://127.0.0.1:3168`. For desktop development, use `npm run desktop` after installing dependencies; the packaged Windows desktop variant uses the installed Microsoft Edge channel.
+### Third-party software
 
-Build an unsigned Windows installer on Windows with `npm run desktop:build`. The repository workflow `.github/workflows/windows-installer.yml` builds the same installer on GitHub's Windows runner and publishes its verified executable to GitHub Releases.
+llama.cpp (MIT): https://github.com/ggml-org/llama.cpp/releases/tag/b12179
 
-## Legacy project boundaries
+Qwen3 0.6B (Apache 2.0, Unsloth GGUF): https://huggingface.co/unsloth/Qwen3-0.6B-GGUF
 
-This repository is new and independent. Auto-Coder remains separate and untouched. We reviewed BryanTheBrain, CloneAI, Genesis Loop, Mirror-OS, and Phone Super Assistant for reusable ideas. They have not been deleted. See [legacy review](docs/LEGACY-REVIEW.md).
+Qwen3 1.7B (Apache 2.0, ggml-org GGUF): https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
 
-Copyright © Work-Mode. Early testing release.
+The installer includes relevant license notices.
+
+## Project scope
+
+The cross-device experiment remains on its own feature branch and is not part of this Windows release. Auto-Coder remains separate and unchanged. This release is focused only on a lightweight Windows desktop experience.

@@ -70,6 +70,19 @@ dialog.settings::backdrop{background:#05070cbd}
 .settings-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
 .settings-help{background:#242b39;border:1px solid #3b4860;padding:12px;border-radius:12px;font-size:12px;color:#b9c5d8;line-height:1.55;margin-top:14px}
 .settings-help a{color:#b9ddff}
+
+@media(max-height:740px){
+  .main{padding-top:12px;padding-bottom:12px}
+  .top{margin-bottom:10px}
+  .top h1{font-size:22px}
+  .columns{min-height:calc(100dvh - 92px);gap:12px}
+  .panel{min-height:300px}
+  .preview{min-height:200px}
+  .chat{padding:12px}
+  .compose{padding:10px}
+  .timeline{max-height:130px;min-height:80px}
+}
+.settings{max-height:min(92dvh,700px);overflow-y:auto}
 </style>
 </head>
 <body>
@@ -77,8 +90,8 @@ dialog.settings::backdrop{background:#05070cbd}
 <aside class="side">
   <div class="brand"><span class="brandmark">W</span><span>Work-Mode</span></div>
   <div class="kicker">Your local assistant</div>
-  <div class="smallbox"><span class="dot" id="statusDot"></span><strong id="stateLabel">Checking...</strong><div class="hint" id="stateDetails">Connect your own browser to begin.</div></div>
-  <p class="hint">Your browser stays on your computer. You approve sensitive actions before they happen. This uses the OpenAI API, not Work credits.</p>
+  <div class="smallbox"><span class="dot" id="statusDot"></span><strong id="stateLabel">Checking...</strong><div class="hint" id="stateDetails">Built-in AI is included. Open Browser or type a task to begin.</div></div>
+  <p class="hint">Your browser stays on this computer. Built-in AI is included; optional paid AI is available in Settings. Approve sensitive actions before they happen.</p>
   <div class="recent"><div class="kicker" style="margin-bottom:10px">Recent tasks</div><div id="historyList" class="hint">Loading local history...</div></div>
 </aside>
 <main class="main">
@@ -114,31 +127,24 @@ dialog.settings::backdrop{background:#05070cbd}
 </div>
 <dialog id="settingsDialog" class="settings">
   <form id="settingsForm">
-    <h2>Choose your AI</h2>
-    <p>Work-Mode can use AI running on your PC for no per-message model fee, or an OpenAI API key for a more capable paid option. You can change this later.</p>
+    <h2>AI Settings</h2>
+    <p>Work-Mode includes offline AI. No additional program, model download, or API account is needed for the built-in option.</p>
     <label for="aiProvider">AI mode</label>
     <select id="aiProvider">
-      <option value="ollama">Free local AI — Ollama (requires installation)</option>
-      <option value="openai">OpenAI API — metered usage</option>
+      <option value="embedded">Built-in AI — included, no separate API charges</option>
+      <option value="openai">OpenAI API — optional, metered usage</option>
     </select>
     <div id="localFields">
-      <label for="ollamaModel">Local model</label>
-      <input id="ollamaModel" spellcheck="false" value="qwen3:8b">
-      <div class="settings-help">For free local AI, first <a href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer">install Ollama for Windows</a> and open it. Then click <b>Download AI model</b> below. No Terminal commands are required. The model is several gigabytes and needs sufficient computer memory.</div>
-      <div class="settings-help" id="localAIStatus" role="status" aria-live="polite">Checking whether Ollama is installed and running…</div>
-      <div class="settings-actions" style="justify-content:flex-start;flex-wrap:wrap">
-        <button type="button" id="checkLocalAI">Check again</button>
-        <button type="button" id="downloadLocalModel" class="primary">Download AI model</button>
-        <button type="button" id="cancelLocalModel" style="display:none">Cancel download</button>
-      </div>
+      <div class="settings-help" id="builtInInfo" role="status" aria-live="polite">Checking this computer's RAM and available AI models…</div>
+      <div class="settings-help">The smaller built-in model runs on computers with limited memory. It is less capable than ChatGPT Work and may be unable to finish complex tasks. If a task cannot be verified, Work-Mode must say so.</div>
     </div>
     <div id="apiFields">
-      <label for="apiModel">OpenAI model</label>
+      <label for="apiModel">API model</label>
       <input id="apiModel" spellcheck="false" value="gpt-4.1-mini">
       <label for="apiKey">API key</label>
-      <input id="apiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Paste your API key here">
-      <p id="keyNote">A saved key is stored only on this computer, never in the GitHub repository.</p>
-      <div class="settings-help">API costs are billed separately from ChatGPT. Set your spending limits in your API account. Never put the key in task chat.</div>
+      <input id="apiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Optional API key">
+      <p id="keyNote">An API key is not needed for built-in AI.</p>
+      <div class="settings-help">OpenAI API usage has a separate cost. Your ChatGPT plan does not cover these charges. Set spending limits in your API account.</div>
     </div>
     <p id="settingsMessage" role="status"></p>
     <div class="settings-actions"><button type="button" id="settingsClose">Cancel</button><button type="submit" class="primary">Save settings</button></div>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, dialog } from 'electron';
+import { app, BrowserWindow, shell, dialog, screen } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -57,8 +57,12 @@ if (!app.requestSingleInstanceLock()) {
       shutdownBrowser = operator.stopBrowser;
       app.setAppUserModelId('com.workmode.desktop');
 
+      const area = screen.getPrimaryDisplay().workArea;
+      // Fit small inexpensive laptops without requiring a 900px-wide window.
+      const width = Math.max(700, Math.min(1280, area.width - 24));
+      const height = Math.max(500, Math.min(820, area.height - 20));
       mainWindow = new BrowserWindow({
-        width: 1440, height: 940, minWidth: 900, minHeight: 650,
+        width, height, minWidth: 700, minHeight: 500,
         autoHideMenuBar: true,
         show: false,
         backgroundColor: '#111218',

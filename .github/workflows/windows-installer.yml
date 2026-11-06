@@ -1,13 +1,14 @@
 name: Build Work-Mode Windows installer
 on:
   push:
-    branches: [main, feature/windows-desktop-installer, feature/desktop-first-run-setup]
+    branches: [main, feature/low-spec-windows-all-in-one]
     paths:
       - 'desktop/**'
       - 'server.js'
       - 'lib/**'
       - 'public/**'
       - 'package.json'
+      - '.github/scripts/**'
       - '.github/workflows/windows-installer.yml'
   workflow_dispatch:
 
@@ -17,7 +18,7 @@ permissions:
 jobs:
   windows-installer:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 65
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,6 +26,9 @@ jobs:
           node-version: '22'
       - name: Install project dependencies
         run: npm install --no-audit --no-fund
+      - name: Download and verify included local AI engine and models
+        shell: pwsh
+        run: ./.github/scripts/fetch-bundled-ai.ps1
       - name: Verify JavaScript syntax
         run: |
           node --check server.js
@@ -32,6 +36,8 @@ jobs:
           node --check public/app.js
           node --check public/extra.js
           node --check public/settings.js
+          node --check lib/embedded-agent.js
+          node --check lib/embedded-runtime.js
       - name: Build installable Windows desktop app
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -60,12 +66,19 @@ jobs:
             $started.Refresh()
             if ($started.HasExited) { throw "Packaged desktop app quit unexpectedly after startup" }
             $html = (Invoke-WebRequest -Uri "http://127.0.0.1:3168" -UseBasicParsing -TimeoutSec 5).Content
-            if ($html -notmatch 'downloadLocalModel') { throw "In-app local AI download interface is missing" }
-            $ollama = Invoke-RestMethod -Uri "http://127.0.0.1:3168/api/local-ai/status" -TimeoutSec 5
-            if ($null -eq $ollama.running) { throw "Local AI status endpoint returned no running field" }
-            Write-Host "Packaged desktop app launched; first-run setup and local AI endpoint confirmed."
+            if ($html -notmatch 'value="embedded"') { throw "Included AI is not the default option" }
+            $localStatus = Invoke-RestMethod -Uri "http://127.0.0.1:3168/api/built-in/status" -TimeoutSec 5
+            if ($localStatus.requiresOllama -ne $false) { throw "This installer still requires Ollama" }
+            if ($localStatus.hardware.enoughMemory -ne $true) { throw "Windows runner unexpectedly lacks enough RAM" }
+            $reply = Invoke-RestMethod -Uri "http://127.0.0.1:3168/api/built-in/check" -Method Post -TimeoutSec 210
+            if ($reply.ok -ne $true -or [string]::IsNullOrWhiteSpace([string]$reply.sample)) {
+              throw "Bundled AI model failed to generate a response"
+            }
+            Write-Host "Verified packaged Work-Mode starts and bundled AI generates a response."
           } finally {
             Get-CimInstance Win32_Process -Filter "name = 'Work-Mode.exe'" |
+              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Get-CimInstance Win32_Process -Filter "name = 'llama-server.exe'" |
               ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
           }
       - name: Verify installer and bundled application files
@@ -75,6 +88,9 @@ jobs:
           if ($installer.Count -ne 1) { throw "Expected one Work-Mode setup EXE; found $($installer.Count)" }
           if ($installer[0].Length -lt 15000000) { throw "Setup EXE is unexpectedly small" }
           if (!(Test-Path "dist/win-unpacked/resources/app.asar")) { throw "Application package was not generated" }
+          if (!(Test-Path "dist/win-unpacked/resources/engine/llama-server.exe")) { throw "Bundled local AI engine is missing" }
+          if ((Get-Item "dist/win-unpacked/resources/models/Qwen3-0.6B-Q4_K_M.gguf").Length -lt 350000000) { throw "Lite AI model is missing" }
+          if ((Get-Item "dist/win-unpacked/resources/models/Qwen3-1.7B-Q4_K_M.gguf").Length -lt 1200000000) { throw "Standard AI model is missing" }
           Write-Host "Verified $($installer[0].Name) ($([math]::Round($installer[0].Length/1MB, 1)) MB)"
       - name: Attach installer as downloadable GitHub Actions artifact
         uses: actions/upload-artifact@v4
@@ -90,10 +106,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $exe = (Get-ChildItem "dist" -Filter "Work-Mode-Setup-*.exe" -File | Select-Object -First 1).FullName
-          $tag = "v0.3.0"
+          $tag = "v0.4.0"
           gh release view $tag --repo "${{ github.repository }}" 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $exe --clobber --repo "${{ github.repository }}"
           } else {
-            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.3.0 for Windows" --prerelease --notes "Windows desktop installer with in-app local AI model download, setup checks and browser control. Unsigned early release; real authenticated website tasks still require testing. Windows with Microsoft Edge required."
+            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.4.0 for Windows" --prerelease --notes "Self-contained Windows desktop installer with CPU-only offline AI model and engine (Lite and Standard, automatically selected by installed RAM). No Ollama or separate API key required for offline use. The models are small and not equivalent to ChatGPT Work; complex website tasks can be inaccurate. Unsigned prerelease; real signed-in website tasks still need verification. Microsoft Edge required for the visible browser."
           }

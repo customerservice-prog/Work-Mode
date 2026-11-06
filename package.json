@@ -1,8 +1,8 @@
 {
   "name": "work-mode",
   "productName": "Work-Mode",
-  "version": "0.3.0",
-  "description": "Local AI browser assistant for Windows",
+  "version": "0.4.0",
+  "description": "Windows browser assistant with included offline AI and low-RAM mode",
   "private": true,
   "type": "module",
   "main": "desktop/main.mjs",
@@ -62,6 +62,29 @@
       "shortcutName": "Work-Mode",
       "artifactName": "Work-Mode-Setup-${version}-${arch}.${ext}"
     },
-    "publish": null
+    "publish": null,
+    "extraResources": [
+      {
+        "from": "desktop-runtime/engine",
+        "to": "engine",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "desktop-runtime/models",
+        "to": "models",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "desktop-runtime/licenses",
+        "to": "licenses",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ]
   }
 }

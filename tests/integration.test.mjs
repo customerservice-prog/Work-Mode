@@ -20,17 +20,18 @@ async function json(url, options = {}) {
   return await res.json();
 }
 
-for (const provider of ['openai', 'ollama']) {
+for (const provider of ['openai']) {
  test('full task loop (' + provider + ') navigates, reads, clicks, verifies and reports without real API costs', { timeout: 45000 }, async () => {
   const webpage = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end('<!doctype html><title>Local browser test</title><button id="launch">Show Result</button><p id="result">Not verified yet</p><script>document.querySelector("#launch").onclick=()=>{document.querySelector("#result").textContent="Action verified";};</script>');
+    res.end('<!doctype html><title>Local browser test</title><button id="launch">Show Result</button><input name="one-time-code" type="text" value="TEST-SECRET-OTP"><input type="password" value="TEST-SECRET-PASSWORD"><input aria-label="API key" value="TEST-SECRET-API-KEY"><p id="result">Not verified yet</p><script>document.querySelector("#launch").onclick=()=>{document.querySelector("#result").textContent="Action verified";};</script>');
   });
   const sitePort = await listen(webpage);
   let count = 0;
   let didVerify = false;
   let statelessOk = false;
   let modelToolChoiceOk = false;
+  let secretFieldsRedacted = false;
   const llm = http.createServer(async (req, res) => {
     if (req.url === '/api/tags') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -53,6 +54,13 @@ for (const provider of ['openai', 'ollama']) {
         if (item.type !== 'function_call_output') return false;
         try { return JSON.parse(item.output).verified === true; } catch { return false; }
       });
+    }
+    if (count === 2) {
+      const outputs=(Array.isArray(body.input)?body.input:[]).filter(x=>x.type==='function_call_output').map(x=>x.output).join(' ');
+      secretFieldsRedacted = outputs.includes('[redacted]') &&
+        !outputs.includes('TEST-SECRET-OTP') &&
+        !outputs.includes('TEST-SECRET-PASSWORD') &&
+        !outputs.includes('TEST-SECRET-API-KEY');
     }
     if (count === 0) {
       const offeredTools = Array.isArray(body.tools) ? body.tools.map(t => t.name) : [];
@@ -127,6 +135,7 @@ for (const provider of ['openai', 'ollama']) {
     assert.ok(didVerify, 'The verification tool did not return a verified result to the AI');
     assert.ok(statelessOk, 'The correct stateful/stateless tool-call context was not used');
     assert.ok(modelToolChoiceOk, 'Model received tools inappropriate for its visual capabilities');
+    assert.ok(secretFieldsRedacted,'Sensitive form values were disclosed to the AI model');
     assert.equal(count, 5);
     assert.ok(state.imageVersion > 0, 'No screenshots recorded');
     assert.ok(state.logs.some(event => /Verified page text condition: PASS/.test(event.message)), 'Verification was not logged');

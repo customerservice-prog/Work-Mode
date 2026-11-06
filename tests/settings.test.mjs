@@ -12,16 +12,16 @@ const { readSettings, saveSettings, getPublicSettings } = await import('../lib/s
 test('AI provider settings persist locally and never expose saved keys', async () => {
   try {
     const prior = await readSettings();
-    assert.ok(prior.provider === 'openai' || prior.provider === 'ollama');
+    assert.ok(prior.provider === 'openai' || prior.provider === 'embedded');
     const saved = await saveSettings({
-      provider: 'ollama', ollamaModel: 'qwen3:8b', openaiModel: 'gpt-4.1-mini',
+      provider: 'embedded', openaiModel: 'gpt-4.1-mini',
       apiKey: 'test-only-not-a-real-key'
     });
-    assert.equal(saved.provider, 'ollama');
+    assert.equal(saved.provider, 'embedded');
     assert.equal(saved.hasApiKey, true);
     assert.equal(JSON.stringify(saved).includes('test-only-not-a-real-key'), false);
     assert.equal((await readSettings()).apiKey, 'test-only-not-a-real-key');
-    const changed = await saveSettings({ provider: 'openai', openaiModel: 'gpt-4.1-mini', ollamaModel: 'qwen3:8b' });
+    const changed = await saveSettings({ provider: 'openai', openaiModel: 'gpt-4.1-mini' });
     assert.equal(changed.provider, 'openai');
     assert.equal((await getPublicSettings()).hasApiKey, true);
     await assert.rejects(() => saveSettings({ provider: 'unsupported' }), /Choose/);
