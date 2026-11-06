@@ -10,6 +10,7 @@ import OpenAI from 'openai';
 import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretField, assertLocalRequest, redactForLog } from './lib/safety.js';
 import { recordTask, listHistory, historyEntry } from './lib/history.js';
 import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
+import { detectOllama, pullOllama } from './lib/local-ai.js';
 
 const app = express();
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
@@ -28,6 +29,9 @@ let stopped = false;
 let snapshotRevision = 0;
 const boundPages = new WeakSet();
 const eventClients = new Set();
+const localAIBase = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_OLLAMA_BASEURL ? process.env.WORKMODE_TEST_OLLAMA_BASEURL : undefined;
+let modelPull = null;
+let modelPullState = { running: false, status: 'idle', percent: null, error: null };
 function allowedIntegrationTestUrl(raw) {
   if (process.env.NODE_ENV !== 'test' || !process.env.WORKMODE_TEST_ORIGIN) return false;
   try { return new URL(raw).origin === process.env.WORKMODE_TEST_ORIGIN; }
@@ -380,6 +384,11 @@ async function runTask(task) {
     if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
     }
+    if (useLocalAI) {
+      const status = await detectOllama(settings.ollamaModel, localAIBase);
+      if (!status.running) throw new Error('Free local AI is not running. Open AI Settings, install and open Ollama, then click Check again.');
+      if (!status.installed) throw new Error('Free local AI model is missing. Open AI Settings and click Download AI model.');
+    }
     await ensureBrowser();
     const client = new OpenAI({
       apiKey: useLocalAI ? 'ollama' : settings.apiKey,
@@ -452,6 +461,52 @@ async function runTask(task) {
   }
 }
 
+
+
+app.get('/api/local-ai/status', async (_req, res) => {
+  try {
+    const settings = await readSettings();
+    const state = await detectOllama(settings.ollamaModel, localAIBase);
+    res.json({ ...state, downloading: modelPullState });
+  } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
+});
+app.post('/api/local-ai/pull', async (_req, res) => {
+  if (modelPull) return res.status(409).json({ error: 'A model download is already running' });
+  if (SESSION.busy) return res.status(409).json({ error: 'Finish the current browser task first' });
+  try {
+    const settings = await readSettings();
+    const state = await detectOllama(settings.ollamaModel, localAIBase);
+    if (!state.running) return res.status(503).json({ error: 'Install and open Ollama before downloading the model.' });
+    if (state.installed) return res.json({ ok: true, installed: true });
+    const abortController = new AbortController();
+    modelPull = abortController;
+    modelPullState = { running: true, status: 'Preparing download', percent: null, error: null };
+    notify('model-progress', modelPullState);
+    const model = settings.ollamaModel;
+    void pullOllama(model, progress => {
+      modelPullState = { ...progress, running: true, error: null };
+      notify('model-progress', modelPullState);
+    }, abortController.signal, localAIBase).then(() => {
+      modelPullState = { running: false, status: 'Model downloaded successfully', percent: 100, error: null };
+    }).catch(err => {
+      const cancelled = abortController.signal.aborted;
+      modelPullState = {
+        running: false,
+        status: cancelled ? 'Download cancelled' : 'Download failed',
+        percent: null,
+        error: cancelled ? null : String(err.message || err).slice(0, 200)
+      };
+    }).finally(() => {
+      modelPull = null;
+      notify('model-progress', modelPullState);
+    });
+    res.status(202).json({ ok: true, downloading: true, model });
+  } catch (err) { res.status(400).json({ error: String(err.message || err) }); }
+});
+app.post('/api/local-ai/cancel', (_req, res) => {
+  if (modelPull) modelPull.abort();
+  res.json({ ok: true });
+});
 
 app.get('/api/settings', async (_req, res) => {
   try { res.json(await getPublicSettings()); }
@@ -526,6 +581,7 @@ app.post('/api/browser/open', async (_req, res) => {
   } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
 app.post('/api/tasks', (req, res) => {
+  if (modelPull) return res.status(409).json({ error: 'The local AI model is downloading. Finish or cancel the download before running a task.' });
   const task = String(req.body?.task || '').trim();
   if (SESSION.busy) return res.status(409).json({ error: 'A task is already running' });
   if (!task || task.length > 3000) return res.status(400).json({ error: 'Enter a task up to 3000 characters' });
@@ -559,6 +615,7 @@ export function startLocalServer(port = PORT) {
 export async function stopBrowser() {
   stopped = true;
   if (pending) pending.resolve(false);
+  if (modelPull) modelPull.abort();
   if (context) {
     const current = context;
     context = null;

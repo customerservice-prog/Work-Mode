@@ -31,6 +31,11 @@ for (const provider of ['openai', 'ollama']) {
   let didVerify = false;
   let statelessOk = false;
   const llm = http.createServer(async (req, res) => {
+    if (req.url === '/api/tags') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ models: [{ name: 'simulated-local' }] }));
+      return;
+    }
     if (req.method !== 'POST' || req.url !== '/v1/responses') {
       res.writeHead(404); res.end(); return;
     }
@@ -79,6 +84,7 @@ for (const provider of ['openai', 'ollama']) {
       AI_PROVIDER: provider, OLLAMA_MODEL: 'simulated-local', WORKMODE_TEST_PROFILE: testProfile,
       OPENAI_API_KEY: 'integration-test-only',
       WORKMODE_TEST_AI_BASE_URL: 'http://127.0.0.1:' + llmPort + '/v1',
+      WORKMODE_TEST_OLLAMA_BASEURL: 'http://127.0.0.1:' + llmPort,
       WORKMODE_TEST_ORIGIN: 'http://127.0.0.1:' + sitePort,
       PORT: String(appPort), MAX_STEPS: '10'
     },

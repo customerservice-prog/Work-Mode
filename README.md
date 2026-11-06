@@ -5,13 +5,13 @@
 ## Install it on your Windows desktop (no coding)
 
 1. Open **[Work-Mode Releases](https://github.com/customerservice-prog/Work-Mode/releases)**.
-2. Download the file named **Work-Mode-Setup-0.2.0-x64.exe** (when the installer build appears).
+2. Download the file named **Work-Mode-Setup-0.3.0-x64.exe** (when the installer build appears).
 3. Double-click the downloaded **.exe** and follow Windows installation prompts.
 4. Open **Work-Mode** using the new desktop shortcut or Start menu.
-5. Click **AI Settings** and choose either **OpenAI API** (metered, requires API key) or **Local Ollama** (no model API fee; requires separate local Ollama installation).
+5. On first launch, Work-Mode opens **AI Settings**. Choose **Free local AI** or **OpenAI API**. For free mode, install and open Ollama for Windows using the link in the app, then click **Download AI model** in Work-Mode. No Terminal command is necessary.
 6. Click **Open Browser**. An Edge window opens; log in to the site yourself once, then tell Work-Mode what you want it to do.
 
-**That's it.** You do not need GitHub, a code editor, Node.js, Railway, terminal commands, or a ZIP of source code to use the desktop app. The installer is built from this source using GitHub Actions.
+**That's it.** You do not need a code editor, Node.js, Railway, or terminal commands to use the installed desktop app. Only installation and AI setup in the app are required. The installer is built from this source using GitHub Actions.
 
 The desktop installer is **not code-signed** yet and may trigger Windows SmartScreen. Do not run unexpected files from unverified publishers. Check that your download came from this exact repository and its Releases page. Early versions are prereleases and should be supervised.
 
@@ -33,7 +33,7 @@ This is an **early local-browser MVP**, not yet a complete ChatGPT Work replacem
 
 **OpenAI API:** Paid separately from your ChatGPT subscription. You enter an API key in the app. Set a usage budget in your API account.
 
-**Local Ollama:** Download [Ollama for Windows](https://ollama.com/download/windows), run `ollama pull qwen3:8b` once in the Windows Terminal, and select **Free local AI** in the app. Large model download and adequate PC memory are required. Local AI may be substantially less reliable on complex sites.
+**Local Ollama:** Install [Ollama for Windows](https://ollama.com/download/windows), open it, and click **Download AI model** in Work-Mode's AI Settings. The download is several gigabytes and adequate PC memory is required. Work-Mode displays the download progress, and you can cancel it. Local AI may be substantially less reliable on complex sites.
 
 Neither uses ChatGPT Work credits. Building the Windows installer with GitHub Actions is separate from Railway; **Railway is not required for the desktop app**.
 

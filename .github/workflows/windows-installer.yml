@@ -59,7 +59,11 @@ jobs:
             Start-Sleep -Seconds 2
             $started.Refresh()
             if ($started.HasExited) { throw "Packaged desktop app quit unexpectedly after startup" }
-            Write-Host "Packaged desktop app launched; localhost health confirmed."
+            $html = (Invoke-WebRequest -Uri "http://127.0.0.1:3168" -UseBasicParsing -TimeoutSec 5).Content
+            if ($html -notmatch 'downloadLocalModel') { throw "In-app local AI download interface is missing" }
+            $ollama = Invoke-RestMethod -Uri "http://127.0.0.1:3168/api/local-ai/status" -TimeoutSec 5
+            if ($null -eq $ollama.running) { throw "Local AI status endpoint returned no running field" }
+            Write-Host "Packaged desktop app launched; first-run setup and local AI endpoint confirmed."
           } finally {
             Get-CimInstance Win32_Process -Filter "name = 'Work-Mode.exe'" |
               ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
@@ -86,10 +90,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $exe = (Get-ChildItem "dist" -Filter "Work-Mode-Setup-*.exe" -File | Select-Object -First 1).FullName
-          $tag = "v0.2.0"
+          $tag = "v0.3.0"
           gh release view $tag --repo "${{ github.repository }}" 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $exe --clobber --repo "${{ github.repository }}"
           } else {
-            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.2.0 for Windows" --prerelease --notes "First Windows desktop installer. Download the Work-Mode-Setup .exe, install, and open the desktop shortcut. Includes local browser control and AI settings. Unsigned early release; real authenticated website tasks still require testing. Windows with Microsoft Edge required."
+            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.3.0 for Windows" --prerelease --notes "Windows desktop installer with in-app local AI model download, setup checks and browser control. Unsigned early release; real authenticated website tasks still require testing. Windows with Microsoft Edge required."
           }

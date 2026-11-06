@@ -124,7 +124,13 @@ dialog.settings::backdrop{background:#05070cbd}
     <div id="localFields">
       <label for="ollamaModel">Local model</label>
       <input id="ollamaModel" spellcheck="false" value="qwen3:8b">
-      <div class="settings-help">First install <a href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer">Ollama for Windows</a>. Then open Windows Terminal and run <code>ollama pull qwen3:8b</code>. A multi-GB model download and sufficient computer memory are required. Keep Ollama running.</div>
+      <div class="settings-help">For free local AI, first <a href="https://ollama.com/download/windows" target="_blank" rel="noopener noreferrer">install Ollama for Windows</a> and open it. Then click <b>Download AI model</b> below. No Terminal commands are required. The model is several gigabytes and needs sufficient computer memory.</div>
+      <div class="settings-help" id="localAIStatus" role="status" aria-live="polite">Checking whether Ollama is installed and running…</div>
+      <div class="settings-actions" style="justify-content:flex-start;flex-wrap:wrap">
+        <button type="button" id="checkLocalAI">Check again</button>
+        <button type="button" id="downloadLocalModel" class="primary">Download AI model</button>
+        <button type="button" id="cancelLocalModel" style="display:none">Cancel download</button>
+      </div>
     </div>
     <div id="apiFields">
       <label for="apiModel">OpenAI model</label>
