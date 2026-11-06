@@ -1,0 +1,21 @@
+{
+  "name": "work-mode",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "browser:install": "playwright install chromium",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "openai": "^6.0.0",
+    "playwright": "1.63.0"
+  }
+}
