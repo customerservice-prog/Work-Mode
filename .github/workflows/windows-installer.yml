@@ -1,7 +1,7 @@
 name: Build Work-Mode Windows installer
 on:
   push:
-    branches: [main, feature/windows-desktop-installer]
+    branches: [main, feature/windows-desktop-installer, feature/desktop-first-run-setup]
     paths:
       - 'desktop/**'
       - 'server.js'
