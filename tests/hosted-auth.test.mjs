@@ -14,6 +14,7 @@ test('private hosted mode gates remote pages and APIs and prevents cross-site wr
   app.use(express.json());
   app.use(security.middleware);
   app.get('/login',(_req,res)=>res.send('login'));
+  app.get('/api/health',(_req,res)=>res.json({ok:true}));
   app.get('/api/secret',(_req,res)=>res.json({private:true}));
   app.post('/api/write',(_req,res)=>res.json({saved:true}));
   const server=app.listen(0,'127.0.0.1');
@@ -43,6 +44,8 @@ test('private hosted mode gates remote pages and APIs and prevents cross-site wr
     assert.equal((await request('/api/secret',{cookie})).status,200);
     assert.equal((await request('/api/auth/session',{cookie})).status,200);
     const wrongHost=await requestWithHost(root,'/api/secret',{host:'other.example.com',cookie});
+    const providerHealth=await requestWithHost(root,'/api/health',{host:'internal.railway'});
+    assert.equal(providerHealth.status,200);
     assert.equal(wrongHost.status,403);
     const crossWrite=await request('/api/write',{method:'POST',cookie,origin:'https://evil.example',body:{x:1}});
     assert.equal(crossWrite.status,403);
