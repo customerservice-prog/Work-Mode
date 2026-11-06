@@ -5,6 +5,7 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import fs from 'node:fs/promises';
+import { requestWithHost } from './_http-client.mjs';
 
 function listen(server) { return new Promise(resolve=>server.listen(0,'127.0.0.1',()=>resolve(server.address().port))); }
 
@@ -31,14 +32,12 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
   let errors='';
   proc.stderr.on('data',chunk=>{errors+=chunk.toString();});
   const base='http://127.0.0.1:'+port;
-  const request=async (endpoint,method='GET',payload,cookie)=>{
-    const response=await fetch(base+endpoint,{
-      method,headers:{Host:'workmode.example.com',Origin:'https://workmode.example.com',
-        ...(payload?{'Content-Type':'application/json'}:{}),...(cookie?{Cookie:cookie}:{})},
-      body:payload?JSON.stringify(payload):undefined,redirect:'manual',signal:AbortSignal.timeout(11000)
+  const request = (endpoint,method='GET',payload,cookie) =>
+    requestWithHost(base,endpoint,{
+      method,host:'workmode.example.com',
+      origin:'https://workmode.example.com',
+      cookie,body:payload,timeoutMs:11000
     });
-    return response;
-  };
   try {
     let ready=false;
     for(let i=0;i<65;i++){

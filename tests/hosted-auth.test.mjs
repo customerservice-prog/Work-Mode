@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { requestWithHost } from './_http-client.mjs';
 import { createHostedAuth } from '../lib/hosted-auth.js';
 
 test('private hosted mode gates remote pages and APIs and prevents cross-site writes', {timeout:12000}, async () => {
@@ -18,9 +19,8 @@ test('private hosted mode gates remote pages and APIs and prevents cross-site wr
   const server=app.listen(0,'127.0.0.1');
   await new Promise(resolve=>server.once('listening',resolve));
   const root='http://127.0.0.1:'+server.address().port;
-  async function request(path,{method='GET',cookie='',body,origin}={}){
-    const headers={Host:'workmode.example.com', ...(cookie?{Cookie:cookie}:{}), ...(origin?{Origin:origin}:{}), ...(body?{'Content-Type':'application/json'}:{})};
-    return fetch(root+path,{method,headers,body:body?JSON.stringify(body):undefined,redirect:'manual'});
+  async function request(path,{method='GET',cookie='',body,origin}={}) {
+    return requestWithHost(root,path,{method,host:'workmode.example.com',origin,cookie,body});
   }
   try {
     const unauth=await request('/api/secret');
@@ -42,7 +42,7 @@ test('private hosted mode gates remote pages and APIs and prevents cross-site wr
     assert.match(login.headers.get('set-cookie'),/SameSite=Strict/);
     assert.equal((await request('/api/secret',{cookie})).status,200);
     assert.equal((await request('/api/auth/session',{cookie})).status,200);
-    const wrongHost=await fetch(root+'/api/secret',{headers:{Host:'other.example.com',Cookie:cookie}});
+    const wrongHost=await requestWithHost(root,'/api/secret',{host:'other.example.com',cookie});
     assert.equal(wrongHost.status,403);
     const crossWrite=await request('/api/write',{method:'POST',cookie,origin:'https://evil.example',body:{x:1}});
     assert.equal(crossWrite.status,403);
