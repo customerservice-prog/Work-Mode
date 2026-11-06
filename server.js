@@ -13,7 +13,9 @@ const app = express();
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
 const MAX_STEPS = Math.min(80, Math.max(2, Number(process.env.MAX_STEPS) || 40));
 const DATA_ROOT = path.join(os.homedir(), '.work-mode');
-const BROWSER_DIR = path.join(DATA_ROOT, 'browser-profile');
+const BROWSER_DIR = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_PROFILE
+  ? path.resolve(process.env.WORKMODE_TEST_PROFILE)
+  : path.join(DATA_ROOT, 'browser-profile');
 const HIGH_IMPACT = /\b(pay|purchase|buy|checkout|order|charge|refund|transfer|withdraw|delete|remove|release|unassign|assign|publish|post|send|submit|save|update|confirm|subscribe|cancel|sign|invite|archive|disable|close account|accept|agree|authorize)\b/i;
 const SESSION = { busy: false, phase: 'idle', task: '', answer: '', logs: [], imageVersion: 0, approval: null, steps: 0, startedAt: '' };
 let context = null;
@@ -370,18 +372,23 @@ async function runTask(task) {
   stopped = false;
   notify('status', { phase: SESSION.phase, task });
   try {
-    if (!process.env.OPENAI_API_KEY?.trim()) throw new Error('OPENAI_API_KEY missing. Open the local .env file and add your API key.');
+    const useLocalAI = String(process.env.AI_PROVIDER || '').toLowerCase() === 'ollama';
+    if (!useLocalAI && !process.env.OPENAI_API_KEY?.trim()) {
+      throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
+    }
     await ensureBrowser();
     const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
+      apiKey: useLocalAI ? 'ollama' : process.env.OPENAI_API_KEY,
       timeout: 70000, maxRetries: 1,
+      ...(useLocalAI ? { baseURL: 'http://127.0.0.1:11434/v1' } : {}),
       ...(process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_AI_BASE_URL
         ? { baseURL: process.env.WORKMODE_TEST_AI_BASE_URL } : {})
     });
-    const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini';
+    const model = useLocalAI ? (process.env.OLLAMA_MODEL || 'qwen3:8b') : (process.env.OPENAI_MODEL || 'gpt-4.1-mini');
+    const transcript = [{ role: 'user', content: task }];
+    const modelOptions = useLocalAI ? {} : { parallel_tool_calls: false };
     let response = await client.responses.create({
-      model, tools: browserTools, parallel_tool_calls: false,
-      input: [{ role: 'system', content: POLICY }, { role: 'user', content: task }]
+      model, instructions: POLICY, tools: browserTools, ...modelOptions, input: transcript
     });
     for (let step = 0; step < MAX_STEPS; step++) {
       if (stopped) throw new Error('Stopped by user');
@@ -418,9 +425,11 @@ async function runTask(task) {
           ]
         });
       }
+      if (useLocalAI) transcript.push(...response.output, ...inputs);
       response = await client.responses.create({
-        model, previous_response_id: response.id, instructions: POLICY, input: inputs,
-        tools: browserTools, parallel_tool_calls: false
+        model, instructions: POLICY, input: useLocalAI ? transcript : inputs,
+        ...(!useLocalAI ? { previous_response_id: response.id } : {}),
+        tools: browserTools, ...modelOptions
       });
     }
     SESSION.phase = 'limited';

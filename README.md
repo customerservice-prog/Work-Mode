@@ -13,7 +13,7 @@ Open a chat page on your Windows computer, describe what you want done on a webs
 1. Install [Node.js 22+](https://nodejs.org/) if you don't have it.
 2. Download this repository from GitHub (Code -> Download ZIP), then extract it.
 3. Double-click `setup-windows.cmd` and follow the prompts. This installs dependencies and creates your local `.env` file.
-4. Enter an **OpenAI API key** in the local `.env` file (not here or in GitHub). API charges are **separate** from ChatGPT subscriptions.
+4. Choose an AI mode in the local `.env` file: **OpenAI API** (usually more capable, but metered) or **Ollama** (runs a local model, no per-request API charges). See below.
 5. Double-click `start-windows.cmd`, open **http://127.0.0.1:3168**, and choose **Open Browser**. Sign in yourself to sites in that window, then give the agent a task.
 
 The agent only runs while the local app is open. Keep the command window open.
@@ -27,10 +27,20 @@ The agent only runs while the local app is open. Keep the command window open.
 - Automated safety and browser smoke tests.
 
 ### Costs
-Local software and Playwright are free; OpenAI API model calls are metered. Budgeting/limits are controlled through your OpenAI API account. This project has its own per-task action limit (`MAX_STEPS`) but that does **not** guarantee a fixed dollar amount.
+Local software and Playwright are free. **OpenAI API mode** has separate usage charges and needs an API key. **Ollama mode** runs a model on your own PC with no per-message model API bill, but uses your computer's RAM/CPU/GPU and can be slower or less reliable. Neither mode consumes ChatGPT Work credits. Hosting on Railway or another cloud provider has its own cost.
+
+### Choose your AI provider
+
+**Option A — paid API mode (more reliable for complex tasks):** In your local `.env`, set `AI_PROVIDER=openai` and `OPENAI_API_KEY=your_key`. Set your own API spending limits in the OpenAI API dashboard.
+
+**Option B — local Ollama (no per-message model API fee):** Install [Ollama](https://ollama.com/download/windows), open Windows Terminal once and run `ollama pull qwen3:8b` (a multi-GB download; a PC with sufficient memory is required). Then set `AI_PROVIDER=ollama` in `.env`. You can leave `OPENAI_API_KEY` empty; set `OLLAMA_MODEL=qwen3:8b`. Ollama must be running when you use Work-Mode.
+
+Ollama's compatible Responses endpoint does not support `previous_response_id`; Work-Mode instead carries the tool calls forward explicitly in local mode. Tool-calling quality depends on the installed model, so some website tasks may not work well in local mode. Never consider an unverified task completed.
+
+The app's action limit (`MAX_STEPS`) bounds browser operations, **not** the price of model tokens. Be careful with long or repeated tasks.
 
 ## Safety
-- The server binds to **127.0.0.1 only**; it is not a remotely hosted public control panel.
+- The server binds to **127.0.0.1 only**; it is not a remotely hosted public control panel. A successful Railway deployment cannot operate the browser on your personal computer; install and run this app on Windows.
 - The automation browser stores cookies under your computer's local user profile, outside GitHub.
 - Passwords and verification codes must be typed by **you**, in the browser window.
 - Browser page text is treated as untrusted; it cannot authorize actions.

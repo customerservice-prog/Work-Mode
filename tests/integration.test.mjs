@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
+import path from 'node:path';
+import fs from 'node:fs/promises';
 
 function listen(server) {
   return new Promise((resolve, reject) => {
@@ -17,7 +20,8 @@ async function json(url, options = {}) {
   return await res.json();
 }
 
-test('full task loop navigates, reads, clicks, verifies and reports without real API costs', { timeout: 55000 }, async () => {
+for (const provider of ['openai', 'ollama']) {
+ test('full task loop (' + provider + ') navigates, reads, clicks, verifies and reports without real API costs', { timeout: 45000 }, async () => {
   const webpage = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
     res.end('<!doctype html><title>Local browser test</title><button id="launch">Show Result</button><p id="result">Not verified yet</p><script>document.querySelector("#launch").onclick=()=>{document.querySelector("#result").textContent="Action verified";};</script>');
@@ -25,6 +29,7 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
   const sitePort = await listen(webpage);
   let count = 0;
   let didVerify = false;
+  let statelessOk = false;
   const llm = http.createServer(async (req, res) => {
     if (req.method !== 'POST' || req.url !== '/v1/responses') {
       res.writeHead(404); res.end(); return;
@@ -32,7 +37,12 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
     const chunks = [];
     for await (const chunk of req) chunks.push(chunk);
     const body = JSON.parse(Buffer.concat(chunks).toString());
-    if (body.previous_response_id && count === 4) {
+    if (count === 4) {
+      if (provider === 'ollama') {
+        statelessOk = !body.previous_response_id && (body.input || []).some(item => item.type === 'function_call');
+      } else {
+        statelessOk = Boolean(body.previous_response_id);
+      }
       didVerify = (Array.isArray(body.input) ? body.input : []).some(item => {
         if (item.type !== 'function_call_output') return false;
         try { return JSON.parse(item.output).verified === true; } catch { return false; }
@@ -61,10 +71,12 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
   });
   const llmPort = await listen(llm);
   const appPort = 49000 + Math.floor(Math.random() * 4000);
+  const testProfile = await fs.mkdtemp(path.join(os.tmpdir(), 'work-mode-integration-'));
   const proc = spawn(process.execPath, ['server.js'], {
     cwd: process.cwd(), windowsHide: true,
     env: {
       ...process.env, NODE_ENV: 'test', BROWSER_HEADLESS: '1',
+      AI_PROVIDER: provider, OLLAMA_MODEL: 'simulated-local', WORKMODE_TEST_PROFILE: testProfile,
       OPENAI_API_KEY: 'integration-test-only',
       WORKMODE_TEST_AI_BASE_URL: 'http://127.0.0.1:' + llmPort + '/v1',
       WORKMODE_TEST_ORIGIN: 'http://127.0.0.1:' + sitePort,
@@ -100,6 +112,7 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
     assert.equal(state.phase, 'done', JSON.stringify({ state, errors }));
     assert.match(state.answer, /verified/i);
     assert.ok(didVerify, 'The verification tool did not return a verified result to the AI');
+    assert.ok(statelessOk, 'The correct stateful/stateless tool-call context was not used');
     assert.equal(count, 5);
     assert.ok(state.imageVersion > 0, 'No screenshots recorded');
     assert.ok(state.logs.some(event => /Verified page text condition: PASS/.test(event.message)), 'Verification was not logged');
@@ -111,5 +124,7 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
     webpage.closeAllConnections();
     llm.closeAllConnections();
     await Promise.allSettled([stopServer(webpage), stopServer(llm)]);
+    await fs.rm(testProfile, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(() => {});
   }
-});
+ });
+}
