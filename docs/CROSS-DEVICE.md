@@ -53,6 +53,25 @@ Set secrets using the cloud host's private environment-variable controls, **not 
 - Explicit owner approval requests before high-impact agent actions
 - Offline Home Screen cache limited to the public icon, not sensitive API responses
 
+
+## Deployment preflight (fail closed)
+
+The production cloud process now refuses to start unless all required checks pass. This is deliberate: a service that loses signed-in browser sessions or starts without an AI budget is not ready for business use.
+
+For Railway:
+- Attach a Railway persistent volume to the Work-Mode service and mount it at \`/data\`.
+- Set \`WORKMODE_DATA_DIR=/data\`. The automatic Railway \`RAILWAY_VOLUME_MOUNT_PATH\` variable must match \`WORKMODE_DATA_DIR\`.
+- The container must launch its browser under an unprivileged user and demonstrate that Chromium's sandbox works. Railway volumes are root-owned; non-root process permissions require an explicitly tested startup strategy.
+- Provide \`OPENAI_API_KEY\` in Railway's private environment controls and set spending limits in the API account. The hosted application deliberately does not permit changing API keys through its web interface.
+- Keep one replica until a shared session and job state system is built.
+- Set \`WORKMODE_TASK_TOKEN_LIMIT\` to a practical per-task model-token ceiling (default 30000). This is a safety ceiling, **not** a guaranteed dollar limit; input screenshots also consume tokens and AI providers charge separately.
+- Set \`WORKMODE_CLOUD_ORIGIN\`, \`WORKMODE_CLOUD_PASSWORD\`, and \`WORKMODE_SESSION_SECRET\` privately. Never commit credentials or reuse an existing customer password.
+- Verify the Railway account is current before enabling networking. The previously inspected service had no domain, no volume, and no environment variables; no cloud installation was activated.
+
+For hosts other than Railway, persistent storage must be independently checked and the operator must explicitly set \`WORKMODE_PERSISTENCE_ACK=1\` after validation.
+
+**Do not generate a public domain or advertise the hosted browser until a production-ready sandbox, storage, authentication, billing, and real-device test have all passed.** The official Playwright Docker image is intended for testing/development and is not recommended for browsing arbitrary untrusted sites without stronger isolation.
+
 ## Production gaps / required verification
 
 This is a **prototype**, not yet a production-hardened agent that can safely operate arbitrary untrusted websites unattended:

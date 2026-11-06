@@ -68,7 +68,14 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     assert.equal(readiness.aiConfigured,false);
     assert.equal(readiness.dataDirectoryConfigured,true);
     assert.equal(readiness.dataDirectoryWritable,true);
+    assert.equal(readiness.volumeAttached,false);
     assert.equal(readiness.browserInstalled,true);
+    const cloudSettings=await (await request('/api/settings','GET',undefined,cookie)).json();
+    assert.equal(cloudSettings.provider,'openai');
+    assert.equal(cloudSettings.hasApiKey,false);
+    assert.equal((await request('/api/settings','POST',{ provider:'openai', apiKey:'no-cloud-key' },cookie)).status,403);
+    assert.equal((await request('/api/local-ai/status','GET',undefined,cookie)).status,404);
+    assert.equal((await request('/api/local-ai/pull','POST',{},cookie)).status,404);
     const bad=await request('/api/remote/navigate','POST',{url:'http://127.0.0.1:1/private'},cookie);
     assert.equal(bad.status,400);
     const navigation=await request('/api/remote/navigate','POST',

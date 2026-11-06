@@ -12,9 +12,12 @@ import { recordTask, listHistory, historyEntry } from './lib/history.js';
 import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
 import { detectOllama, pullOllama } from './lib/local-ai.js';
 import { createHostedAuth } from './lib/hosted-auth.js';
+import { cloudRequirements, assertCloudRequirements } from './lib/cloud-config.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
+const CLOUD_MODEL_MAX_OUTPUT = CLOUD_MODE ? 1600 : undefined;
+const CLOUD_TOKEN_PER_TASK = Math.max(2000, Math.min(80000, Number(process.env.WORKMODE_TASK_TOKEN_LIMIT) || 30000));
 const hostedSecurity = createHostedAuth({ enabled: CLOUD_MODE, origin: process.env.WORKMODE_CLOUD_ORIGIN, password: process.env.WORKMODE_CLOUD_PASSWORD, secret: process.env.WORKMODE_SESSION_SECRET });
 
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
@@ -389,6 +392,14 @@ const POLICY = [
   'When a site requires authentication, ask the user to sign in directly in the visible browser and then give a follow-up task.',
   'The agent can only control its own Playwright browser, not the user existing Edge or Chrome tabs.'
 ].join('\n');
+async function effectiveSettings() {
+  if (CLOUD_MODE) return {
+    provider: 'openai',
+    apiKey: String(process.env.OPENAI_API_KEY || ''),
+    openaiModel: String(process.env.OPENAI_MODEL || 'gpt-4.1-mini')
+  };
+  return readSettings();
+}
 async function runTask(task) {
   SESSION.busy = true;
   SESSION.steps = 0;
@@ -400,7 +411,7 @@ async function runTask(task) {
   stopped = false;
   notify('status', { phase: SESSION.phase, task });
   try {
-    const settings = await readSettings();
+    const settings = await effectiveSettings();
     const useLocalAI = !CLOUD_MODE && settings.provider === 'ollama';
     if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
@@ -431,11 +442,19 @@ async function runTask(task) {
     const transcript = [{ role: 'user', content: task }];
     const modelOptions = useLocalAI ? {} : { parallel_tool_calls: false };
     let response = await client.responses.create({
-      model, instructions: activePolicy, tools: activeTools, ...modelOptions, input: transcript
+      model, instructions: activePolicy, tools: activeTools, ...modelOptions,
+      ...(CLOUD_MODE ? { max_output_tokens: CLOUD_MODEL_MAX_OUTPUT } : {}),
+      input: transcript
     });
+    let taskTokensUsed = Number(response.usage?.total_tokens || 0);
     for (let step = 0; step < MAX_STEPS; step++) {
       if (stopped) throw new Error('Stopped by user');
       if (response.status !== 'completed') throw new Error('Model response was not completed: ' + String(response.status));
+      if (CLOUD_MODE && taskTokensUsed >= CLOUD_TOKEN_PER_TASK) {
+        SESSION.phase = 'limited';
+        SESSION.answer = 'AI token budget reached for this task. Review the changes made so far; completion is not confirmed.';
+        return;
+      }
       const calls = response.output.filter(item => item.type === 'function_call');
       if (!calls.length) {
         SESSION.answer = response.output_text || 'The model returned no final explanation.';
@@ -472,8 +491,10 @@ async function runTask(task) {
       response = await client.responses.create({
         model, instructions: activePolicy, input: useLocalAI ? transcript : inputs,
         ...(!useLocalAI ? { previous_response_id: response.id } : {}),
-        tools: activeTools, ...modelOptions
+        tools: activeTools, ...modelOptions,
+        ...(CLOUD_MODE ? { max_output_tokens: CLOUD_MODEL_MAX_OUTPUT } : {})
       });
+      taskTokensUsed += Number(response.usage?.total_tokens || 0);
     }
     SESSION.phase = 'limited';
     SESSION.answer = 'Stopped at the per-task action limit of ' + MAX_STEPS + '. This is not confirmed complete. Review the browser, then give the next instruction.';
@@ -494,6 +515,7 @@ async function runTask(task) {
 
 
 app.get('/api/local-ai/status', async (_req, res) => {
+  if (CLOUD_MODE) return res.status(404).json({ error: 'Local models are not available from the cloud workspace' });
   try {
     const settings = await readSettings();
     const state = await detectOllama(settings.ollamaModel, localAIBase);
@@ -501,6 +523,7 @@ app.get('/api/local-ai/status', async (_req, res) => {
   } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
 app.post('/api/local-ai/pull', async (_req, res) => {
+  if (CLOUD_MODE) return res.status(404).json({ error: 'Local models are not available from the cloud workspace' });
   if (modelPull) return res.status(409).json({ error: 'A model download is already running' });
   if (SESSION.busy) return res.status(409).json({ error: 'Finish the current browser task first' });
   try {
@@ -534,20 +557,23 @@ app.post('/api/local-ai/pull', async (_req, res) => {
   } catch (err) { res.status(400).json({ error: String(err.message || err) }); }
 });
 app.post('/api/local-ai/cancel', (_req, res) => {
+  if (CLOUD_MODE) return res.status(404).json({ error: 'Local models are not available from the cloud workspace' });
   if (modelPull) modelPull.abort();
   res.json({ ok: true });
 });
 
 app.get('/api/settings', async (_req, res) => {
   try {
-    const settings = await getPublicSettings();
-    res.json(CLOUD_MODE ? { ...settings, provider:'openai', cloud:true } : settings);
+    const settings = CLOUD_MODE
+      ? { provider:'openai', cloud:true, openaiModel:process.env.OPENAI_MODEL || 'gpt-4.1-mini', hasApiKey:Boolean(process.env.OPENAI_API_KEY) }
+      : await getPublicSettings();
+    res.json(settings);
   }
   catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
 app.post('/api/settings', async (req, res) => {
   if (SESSION.busy) return res.status(409).json({ error: 'Finish the running task before changing AI settings' });
-  if (CLOUD_MODE && req.body?.provider !== 'openai') return res.status(400).json({ error:'Cloud mode currently requires OpenAI API' });
+  if (CLOUD_MODE) return res.status(403).json({ error:'Cloud AI credentials are managed on the private server, not in this browser' });
   try { res.json(await saveSettings(req.body || {})); }
   catch (err) { res.status(400).json({ error: String(err.message || err) }); }
 });
@@ -673,8 +699,8 @@ app.get('/api/mode', (_req,res) => res.json({ cloud: CLOUD_MODE, name: 'Work-Mod
 app.get('/api/cloud/readiness', async (_req,res) => {
   if (!CLOUD_MODE) return res.status(404).json({ error:'Not hosted mode' });
   try {
-    const settings=await readSettings();
-    const dataDirectoryConfigured=Boolean(process.env.WORKMODE_DATA_DIR);
+    const checks=cloudRequirements(process.env);
+    const dataDirectoryConfigured=checks.dataDirectoryConfigured;
     let dataDirectoryWritable=false;
     let browserInstalled=false;
     try {
@@ -690,8 +716,9 @@ app.get('/api/cloud/readiness', async (_req,res) => {
     } catch {}
     res.set('Cache-Control','no-store').json({
       hosted:true,
-      aiConfigured:Boolean(settings.apiKey),
+      aiConfigured:checks.aiConfigured,
       dataDirectoryConfigured,
+      volumeAttached:checks.volumeAttached,
       dataDirectoryWritable,
       browserInstalled,
       warning:'These checks do not prove that storage is persistent, the cloud bill is current, or Chromium isolation is secure.'
@@ -742,6 +769,8 @@ app.post('/api/stop', (_req, res) => {
 });
 export function startLocalServer(port = PORT) {
   return new Promise((resolve, reject) => {
+    try { assertCloudRequirements(process.env); }
+    catch(err) { reject(err); return; }
     const localServer = app.listen(port, CLOUD_MODE ? '0.0.0.0' : '127.0.0.1');
     localServer.once('error', reject);
     localServer.once('listening', () => {

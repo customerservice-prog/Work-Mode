@@ -24,6 +24,7 @@ jobs:
           node --check lib/history.js
           node --check lib/settings.js
           node --check lib/hosted-auth.js
+          node --check lib/cloud-config.js
           node --check public/remote.js
           node --check public/mobile.js
           node --check lib/local-ai.js
