@@ -398,10 +398,19 @@ async function runTask(task) {
         ? { baseURL: process.env.WORKMODE_TEST_AI_BASE_URL } : {})
     });
     const model = useLocalAI ? settings.ollamaModel : settings.openaiModel;
+    // The default local Qwen3 model is text-only. Keep screenshot previews
+    // visible to the user, but do not send image inputs to a text-only model.
+    const activeTools = useLocalAI
+      ? browserTools.filter(tool => tool.name !== 'inspect_visual')
+      : browserTools;
+    const activePolicy = useLocalAI
+      ? POLICY.replace('Use inspect_visual and verify_page to ground conclusions; do not guess from page text alone.',
+        'Use read_page and verify_page to ground conclusions. You cannot interpret screenshots in this local text-only AI mode. Never claim to have visually inspected the page.')
+      : POLICY;
     const transcript = [{ role: 'user', content: task }];
     const modelOptions = useLocalAI ? {} : { parallel_tool_calls: false };
     let response = await client.responses.create({
-      model, instructions: POLICY, tools: browserTools, ...modelOptions, input: transcript
+      model, instructions: activePolicy, tools: activeTools, ...modelOptions, input: transcript
     });
     for (let step = 0; step < MAX_STEPS; step++) {
       if (stopped) throw new Error('Stopped by user');
@@ -440,9 +449,9 @@ async function runTask(task) {
       }
       if (useLocalAI) transcript.push(...response.output, ...inputs);
       response = await client.responses.create({
-        model, instructions: POLICY, input: useLocalAI ? transcript : inputs,
+        model, instructions: activePolicy, input: useLocalAI ? transcript : inputs,
         ...(!useLocalAI ? { previous_response_id: response.id } : {}),
-        tools: browserTools, ...modelOptions
+        tools: activeTools, ...modelOptions
       });
     }
     SESSION.phase = 'limited';

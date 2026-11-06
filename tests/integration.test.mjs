@@ -30,6 +30,7 @@ for (const provider of ['openai', 'ollama']) {
   let count = 0;
   let didVerify = false;
   let statelessOk = false;
+  let modelToolChoiceOk = false;
   const llm = http.createServer(async (req, res) => {
     if (req.url === '/api/tags') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -52,6 +53,12 @@ for (const provider of ['openai', 'ollama']) {
         if (item.type !== 'function_call_output') return false;
         try { return JSON.parse(item.output).verified === true; } catch { return false; }
       });
+    }
+    if (count === 0) {
+      const offeredTools = Array.isArray(body.tools) ? body.tools.map(t => t.name) : [];
+      modelToolChoiceOk = provider === 'ollama'
+        ? !offeredTools.includes('inspect_visual') && offeredTools.includes('verify_page')
+        : offeredTools.includes('inspect_visual') && offeredTools.includes('verify_page');
     }
     count++;
     const calls = [
@@ -119,6 +126,7 @@ for (const provider of ['openai', 'ollama']) {
     assert.match(state.answer, /verified/i);
     assert.ok(didVerify, 'The verification tool did not return a verified result to the AI');
     assert.ok(statelessOk, 'The correct stateful/stateless tool-call context was not used');
+    assert.ok(modelToolChoiceOk, 'Model received tools inappropriate for its visual capabilities');
     assert.equal(count, 5);
     assert.ok(state.imageVersion > 0, 'No screenshots recorded');
     assert.ok(state.logs.some(event => /Verified page text condition: PASS/.test(event.message)), 'Verification was not logged');

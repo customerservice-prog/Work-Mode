@@ -33,7 +33,7 @@ This is an **early local-browser MVP**, not yet a complete ChatGPT Work replacem
 
 **OpenAI API:** Paid separately from your ChatGPT subscription. You enter an API key in the app. Set a usage budget in your API account.
 
-**Local Ollama:** Install [Ollama for Windows](https://ollama.com/download/windows), open it, and click **Download AI model** in Work-Mode's AI Settings. The download is several gigabytes and adequate PC memory is required. Work-Mode displays the download progress, and you can cancel it. Local AI may be substantially less reliable on complex sites.
+**Local Ollama:** Install [Ollama for Windows](https://ollama.com/download/windows), open it, and click **Download AI model** in Work-Mode's AI Settings. The download is several gigabytes and adequate PC memory is required. Work-Mode displays the download progress, and you can cancel it. The default local Qwen3 model is text-only: it operates from webpage controls and verification, while screenshots are shown to you. It cannot visually analyze screenshots automatically. Local AI may be substantially less reliable on complex sites.
 
 Neither uses ChatGPT Work credits. Building the Windows installer with GitHub Actions is separate from Railway; **Railway is not required for the desktop app**.
 
