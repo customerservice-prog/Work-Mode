@@ -82,6 +82,16 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     assert.equal((await request('/api/settings','POST',{ provider:'openai', apiKey:'no-cloud-key' },cookie)).status,403);
     assert.equal((await request('/api/local-ai/status','GET',undefined,cookie)).status,404);
     assert.equal((await request('/api/local-ai/pull','POST',{},cookie)).status,404);
+    // The phone and computer may open the same browser at nearly the same
+    // instant. They must share one launch rather than race the profile lock.
+    const opens = await Promise.all([
+      request('/api/browser/open','POST',{},cookie),
+      request('/api/browser/open','POST',{},cookie),
+      request('/api/browser/open','POST',{},cookie)
+    ]);
+    assert.deepEqual(opens.map(r => r.status),[200,200,200]);
+    const openedTabs = await (await request('/api/tabs','GET',undefined,cookie)).json();
+    assert.equal(openedTabs.tabs.length,1);
     const bad=await request('/api/remote/navigate','POST',{url:'http://127.0.0.1:1/private'},cookie);
     assert.equal(bad.status,400);
     const navigation=await request('/api/remote/navigate','POST',

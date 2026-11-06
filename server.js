@@ -103,18 +103,22 @@ function attachPage(page) {
     await dialog.dismiss().catch(() => {});
   });
 }
-async function ensureBrowser() {
-  if (!context) {
-    await fs.mkdir(DATA_ROOT, { recursive: true });
-    context = await chromium.launchPersistentContext(BROWSER_DIR, {
-      ...(process.env.WORKMODE_DESKTOP === '1' && !CLOUD_MODE ? { channel: 'msedge' } : {}),
-      headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
-      chromiumSandbox: CLOUD_MODE && process.env.NODE_ENV !== 'test',
-      viewport: { width: 1200, height: 820 },
-      acceptDownloads: false
-    });
-    // A persistent profile stores cookies only on this computer, never in GitHub.
-    await context.route('**/*', async route => {
+let browserLaunch = null;
+let lastBrowserUse = Date.now();
+
+async function launchBrowser() {
+  await fs.mkdir(DATA_ROOT, { recursive: true, mode: 0o700 });
+  const fresh = await chromium.launchPersistentContext(BROWSER_DIR, {
+    ...(process.env.WORKMODE_DESKTOP === '1' && !CLOUD_MODE ? { channel: 'msedge' } : {}),
+    headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
+    chromiumSandbox: CLOUD_MODE && process.env.NODE_ENV !== 'test',
+    viewport: { width: 1200, height: 820 },
+    acceptDownloads: false
+  });
+  try {
+    // Install network restrictions BEFORE making the browser available to
+    // a request from another device.
+    await fresh.route('**/*', async route => {
       try {
         const requested = route.request();
         const target = requested.url();
@@ -138,12 +142,51 @@ async function ensureBrowser() {
         await route.abort('blockedbyclient').catch(() => {});
       }
     });
-    context.on('page', attachPage);
-    context.on('close', () => { context = null; activePage = null; log('Browser closed'); });
+    fresh.on('page', attachPage);
+    const initialPage = fresh.pages().at(-1) || await fresh.newPage();
+    attachPage(initialPage);
+    fresh.on('close', () => {
+      if (context === fresh) {
+        context = null;
+        activePage = null;
+        log('Browser closed');
+      }
+    });
+    context = fresh;
+  } catch (err) {
+    await fresh.close().catch(() => {});
+    throw err;
   }
-  if (!activePage || activePage.isClosed()) attachPage(context.pages().at(-1) || await context.newPage());
+}
+
+async function ensureBrowser() {
+  if (!context && !browserLaunch) {
+    browserLaunch = launchBrowser().finally(() => { browserLaunch = null; });
+  }
+  if (browserLaunch) await browserLaunch;
+  if (!context) throw new Error('Browser could not be started');
+  if (!activePage || activePage.isClosed()) {
+    attachPage(context.pages().at(-1) || await context.newPage());
+  }
+  lastBrowserUse = Date.now();
   return activePage;
 }
+
+// Closing an idle browser frees RAM on the remote machine. Chromium's profile
+// remains on the private persistent volume so the owner can open it later.
+if (CLOUD_MODE) {
+  const idleSweep = setInterval(() => {
+    if (!context || browserLaunch || SESSION.busy || pending) return;
+    if (Date.now() - lastBrowserUse < 20 * 60 * 1000) return;
+    const idle = context;
+    context = null;
+    activePage = null;
+    void idle.close().then(() => log('Remote browser closed after 20 minutes idle; open it to resume.'))
+      .catch(() => {});
+  }, 60000);
+  idleSweep.unref?.();
+}
+
 async function refreshImage() {
   if (!activePage || activePage.isClosed()) return;
   try {
@@ -807,6 +850,7 @@ export async function stopBrowser() {
   stopped = true;
   if (pending) pending.resolve(false);
   if (modelPull) modelPull.abort();
+  if (browserLaunch) await browserLaunch.catch(() => {});
   if (context) {
     const current = context;
     context = null;
