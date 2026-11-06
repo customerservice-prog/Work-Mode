@@ -61,7 +61,7 @@ The production cloud process now refuses to start unless all required checks pas
 For Railway:
 - Attach a Railway persistent volume to the Work-Mode service and mount it at \`/data\`.
 - Set \`WORKMODE_DATA_DIR=/data\`. The automatic Railway \`RAILWAY_VOLUME_MOUNT_PATH\` variable must match \`WORKMODE_DATA_DIR\`.
-- The container must launch its browser under an unprivileged user and demonstrate that Chromium's sandbox works. Railway volumes are root-owned; non-root process permissions require an explicitly tested startup strategy.
+- The Docker startup entrypoint now prepares the root-owned `/data` volume, then drops to `pwuser` with `gosu` before launching the Node service. The container image build and Chromium's user-namespace/seccomp sandbox have **not** yet been proven on Railway; deployment remains blocked until those tests pass.
 - Provide \`OPENAI_API_KEY\` in Railway's private environment controls and set spending limits in the API account. The hosted application deliberately does not permit changing API keys through its web interface.
 - Keep one replica until a shared session and job state system is built.
 - Set \`WORKMODE_TASK_TOKEN_LIMIT\` to a practical per-task model-token ceiling (default 30000). This is a safety ceiling, **not** a guaranteed dollar limit; input screenshots also consume tokens and AI providers charge separately.
