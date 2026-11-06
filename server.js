@@ -73,8 +73,18 @@ async function ensureBrowser() {
     await context.route('**/*', async route => {
       try {
         const requested = route.request();
-        if (requested.isNavigationRequest()) await assertPublicNavigation(requested.url());
-        else assertPublicUrl(requested.url());
+        const target = requested.url();
+        const protocol = new URL(target).protocol;
+        if (!requested.isNavigationRequest() && ['data:', 'blob:'].includes(protocol)) {
+          await route.continue();
+          return;
+        }
+        if (!['http:', 'https:'].includes(protocol)) {
+          await route.abort('blockedbyclient');
+          return;
+        }
+        if (requested.isNavigationRequest()) await assertPublicNavigation(target);
+        else assertPublicUrl(target);
         await route.continue();
       } catch {
         await route.abort('blockedbyclient').catch(() => {});
