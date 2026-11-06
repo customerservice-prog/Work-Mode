@@ -18,6 +18,10 @@ test('small phones and tablets can switch between chat and browser without horiz
         assert.notEqual(await nav.evaluate(el=>getComputedStyle(el).display),'none');
         assert.notEqual(await page.locator('#chatPanel').evaluate(el=>getComputedStyle(el).display),'none');
         assert.equal(await page.locator('#browserPanel').evaluate(el=>getComputedStyle(el).display),'none');
+        await page.evaluate(() => window.dispatchEvent(new CustomEvent('workmode-approval', { detail:{ pending:true } })));
+        assert.equal(await page.locator('body').getAttribute('data-mobile-view'),'browser');
+        await page.locator('[data-mobile-view=chat]').click();
+        assert.equal(await page.locator('body').getAttribute('data-mobile-view'),'chat');
         await page.locator('[data-mobile-view=browser]').click();
         assert.notEqual(await page.locator('#browserPanel').evaluate(el=>getComputedStyle(el).display),'none');
         assert.equal(await page.locator('#chatPanel').evaluate(el=>getComputedStyle(el).display),'none');

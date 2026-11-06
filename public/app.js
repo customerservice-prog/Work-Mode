@@ -51,6 +51,7 @@ function approval(data) {
   currentApproval = data || null;
   $('approval').style.display = data ? 'block' : 'none';
   $('approvalText').textContent = data?.label || '';
+  if (data) window.dispatchEvent(new CustomEvent('workmode-approval', { detail: { pending: true } }));
 }
 async function decide(approve) {
   if (!currentApproval) return;
