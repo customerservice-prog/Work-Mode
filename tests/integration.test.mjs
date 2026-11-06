@@ -13,7 +13,7 @@ function stopServer(server) {
   return new Promise(resolve => server.close(() => resolve()));
 }
 async function json(url, options = {}) {
-  const res = await fetch(url, options);
+  const res = await fetch(url, { ...options, signal: AbortSignal.timeout(3000) });
   return await res.json();
 }
 
@@ -88,8 +88,9 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
     });
     assert.equal(task.status, 200);
     let state;
-    for (let i = 0; i < 100; i++) {
-      state = await json('http://127.0.0.1:' + appPort + '/api/status');
+    for (let i = 0; i < 80; i++) {
+      try { state = await json('http://127.0.0.1:' + appPort + '/api/status'); }
+      catch { if (proc.exitCode !== null) break; }
       if (!state.busy && ['done','error','limited','stopped'].includes(state.phase)) break;
       await new Promise(r => setTimeout(r, 250));
     }
@@ -103,7 +104,9 @@ test('full task loop navigates, reads, clicks, verifies and reports without real
     assert.equal(screenshot.status, 200);
     assert.match(screenshot.headers.get('content-type'), /image\/jpeg/i);
   } finally {
-    proc.kill();
+    proc.kill('SIGKILL');
+    webpage.closeAllConnections();
+    llm.closeAllConnections();
     await Promise.allSettled([stopServer(webpage), stopServer(llm)]);
   }
 });
