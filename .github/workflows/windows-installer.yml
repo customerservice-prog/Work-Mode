@@ -36,6 +36,34 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:build
+      - name: Launch packaged desktop app and verify its local server
+        shell: pwsh
+        run: |
+          $appPath = (Resolve-Path "dist/win-unpacked/Work-Mode.exe").Path
+          $started = Start-Process -FilePath $appPath -PassThru
+          try {
+            $healthy = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              if ($started.HasExited) { break }
+              try {
+                $res = Invoke-RestMethod -Uri "http://127.0.0.1:3168/api/health" -TimeoutSec 2
+                if ($res.service -eq "Work-Mode" -and $res.ok -eq $true) {
+                  $healthy = $true
+                  break
+                }
+              } catch {
+                Start-Sleep -Seconds 1
+              }
+            }
+            if (-not $healthy) { throw "Packaged desktop app failed to start its local HTTP server" }
+            Start-Sleep -Seconds 2
+            $started.Refresh()
+            if ($started.HasExited) { throw "Packaged desktop app quit unexpectedly after startup" }
+            Write-Host "Packaged desktop app launched; localhost health confirmed."
+          } finally {
+            Get-CimInstance Win32_Process -Filter "name = 'Work-Mode.exe'" |
+              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+          }
       - name: Verify installer and bundled application files
         shell: pwsh
         run: |
