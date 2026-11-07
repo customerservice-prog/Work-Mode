@@ -48,6 +48,7 @@ async function verifyCloudBrowserIsolation() {
   let testBrowser;
   try {
     testBrowser = await chromium.launch({
+      ...(CLOUD_MODE ? { channel: 'chromium' } : {}),
       headless: true, chromiumSandbox: true, timeout: 25000
     });
     const page = await testBrowser.newPage();
@@ -57,7 +58,7 @@ async function verifyCloudBrowserIsolation() {
     console.log('Work-Mode isolated Chromium browser startup passed.');
   } catch(err) {
     cloudBrowserTest = { status:'failed' };
-    console.error('Work-Mode secure Chromium startup is unavailable:',String(err.message||err).slice(0,500));
+    console.error('Work-Mode secure Chromium startup is unavailable:',String(err.message||err).slice(-1500));
   } finally {
     await testBrowser?.close().catch(() => {});
   }
@@ -129,7 +130,7 @@ let lastBrowserUse = Date.now();
 async function launchBrowser() {
   await fs.mkdir(DATA_ROOT, { recursive: true, mode: 0o700 });
   const fresh = await chromium.launchPersistentContext(BROWSER_DIR, {
-    ...(process.env.WORKMODE_DESKTOP === '1' && !CLOUD_MODE ? { channel: 'msedge' } : {}),
+    ...(CLOUD_MODE ? { channel: 'chromium' } : process.env.WORKMODE_DESKTOP === '1' ? { channel: 'msedge' } : {}),
     headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
     chromiumSandbox: CLOUD_MODE && process.env.NODE_ENV !== 'test',
     viewport: { width: 1200, height: 820 },
