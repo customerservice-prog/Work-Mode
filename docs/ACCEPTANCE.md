@@ -9,6 +9,7 @@ requires direct observation against the deployed Railway service or physical dev
 | Browser navigation and screenshot preview | Implemented; earlier live browser startup verified | Test on chosen websites before relying on outcomes |
 | Zero-subscription browser commands | Implemented and automatically tested | Not natural-language AI beyond recognized commands |
 | Advanced AI conversation with browser tools | Optional compatible provider implemented and mocked in tests | Actual model server is not provisioned or connected |
+| Existing Edge tab connector (no paid browser API) | Extension and UI implemented; simulated tests passing | Requires manual Edge installation, per-site consent, and real Facebook acceptance test |
 | Avoid paid AI API charges | Default mode has no AI API calls | Railway hosting and external model compute may incur costs |
 | Password rotation and session revocation | Implemented and automatically tested | Owner must perform private rotation in the web interface |
 | Durable interrupted tasks | Implemented and automatically tested | Resumption requires owner review; no blind replay |
