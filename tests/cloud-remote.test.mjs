@@ -102,6 +102,27 @@ test('protected cloud mode supports sign-in, touch browser controls and secret-f
     const screenshot=await request('/api/screenshot','GET',undefined,cookie);
     assert.equal(screenshot.status,200);
     assert.match(screenshot.headers.get('content-type'),/image\/jpeg/);
+    // With no OPENAI_API_KEY, basic commands must still work end-to-end.
+    const basic = await request('/api/tasks','POST',{task:'Read the page'},cookie);
+    assert.equal(basic.status,200);
+    let basicStatus;
+    for (let i=0;i<35;i++) {
+      basicStatus=await (await request('/api/status','GET',undefined,cookie)).json();
+      if (!basicStatus.busy && basicStatus.task === 'Read the page') break;
+      await new Promise(resolve=>setTimeout(resolve,100));
+    }
+    assert.equal(basicStatus.phase,'done',basicStatus.answer);
+    assert.match(basicStatus.answer,/Remote test/);
+    assert.match(basicStatus.answer,/Page text excerpt/);
+    const unsupported = await request('/api/tasks','POST',{task:'Audit everything with AI'},cookie);
+    assert.equal(unsupported.status,200);
+    for (let i=0;i<20;i++) {
+      basicStatus=await (await request('/api/status','GET',undefined,cookie)).json();
+      if (!basicStatus.busy && basicStatus.task === 'Audit everything with AI') break;
+      await new Promise(resolve=>setTimeout(resolve,60));
+    }
+    assert.equal(basicStatus.phase,'done');
+    assert.match(basicStatus.answer,/not attempted any action/);
     const insert=await request('/api/remote/type','POST',{text:'dummy-password-never-log-this'},cookie);
     assert.equal(insert.status,200);
     const status=await (await request('/api/status','GET',undefined,cookie)).json();
