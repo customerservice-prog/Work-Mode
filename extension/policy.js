@@ -6,7 +6,7 @@ globalThis.WorkModeTabPolicy = (() => {
   function supportedUrl(raw) {
     try {
       const u=new URL(raw);
-      const host=u.hostname.toLowerCase().replace(/^\\[|\\]$/g,'');
+      const host=u.hostname.toLowerCase().replace(/^\[|\]$/g,'');
       const octets=host.split('.').map(Number);
       const isIpv4=octets.length===4 && octets.every(n=>Number.isInteger(n)&&n>=0&&n<=255);
       const privateIp=isIpv4 && (octets[0]===0||octets[0]===10||octets[0]===127||
