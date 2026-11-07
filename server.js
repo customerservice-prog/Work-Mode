@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import OpenAI from 'openai';
 import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretField, assertLocalRequest, redactForLog } from './lib/safety.js';
-import { recordTask, listHistory, historyEntry } from './lib/history.js';
+import { recordTask, listHistory, historyEntry, migrateHistory } from './lib/history.js';
 import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
 import { detectOllama, pullOllama } from './lib/local-ai.js';
 import { createHostedAuth } from './lib/hosted-auth.js';
@@ -1046,6 +1046,7 @@ app.post('/api/stop', (_req, res) => {
 });
 export async function startLocalServer(port = PORT) {
   assertCloudRequirements(process.env);
+  if (CLOUD_MODE) await migrateHistory();
   if (taskJournal) {
     const interrupted=await taskJournal.recover();
     recoveredJob=interrupted[0]||null;
