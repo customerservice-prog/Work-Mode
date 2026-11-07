@@ -31,6 +31,10 @@ async function remoteAction(path, data) {
 async function refreshCloudUsage() {
   if (!document.body.classList.contains('cloud-mode')) return;
   const usageEl=$r('cloudUsage');
+  if (window.workModeCloudAiBackend === 'compatible') {
+    usageEl.textContent = 'Self-hosted AI model configured; no Work-Mode API token quota applies. Server compute and hosting still have costs.';
+    return;
+  }
   if (window.workModeCloudAiReady === false) {
     usageEl.textContent = 'Basic browser commands: no AI API fees or message credits. Railway hosting still uses billable resources.';
     return;
@@ -55,6 +59,7 @@ function applyCloudReadiness(state) {
   const canRun = browserReady;
   window.workModeCloudBlocked = !browserReady;
   window.workModeCloudAiReady = aiReady;
+  window.workModeCloudAiBackend = state.aiBackend || 'basic';
   window.workModeCloudBrowserBlocked = !browserReady;
   if (!aiReady && browserReady) {
     const ideas = $r('ideas');
@@ -89,7 +94,8 @@ function applyCloudReadiness(state) {
     $r('cloudBannerText').textContent = 'Chromium sandbox is disabled on this Railway host. Avoid sensitive accounts and untrusted websites.';
   }
   $r('cloudStatus').textContent = browserReady
-    ? (aiReady ? 'Advanced AI configured. ' : 'Basic browser commands available without an API. Advanced AI not configured. ') +
+    ? (aiReady ? (state.aiBackend === 'compatible' ? 'Self-hosted AI endpoint configured; connectivity not yet verified. ' : 'Advanced AI API configured. ')
+      : 'Basic browser commands available without an API. Advanced AI not configured. ') +
       (containerOnly ? 'Chromium sandbox is off.' : 'Browser isolation checks passed.')
     : 'Workspace not ready: ' + issues.join('; ') + '.';
 
