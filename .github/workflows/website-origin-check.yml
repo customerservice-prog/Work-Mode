@@ -14,7 +14,7 @@ jobs:
         run: |
           set -euo pipefail
           site="https://work-mode-production.up.railway.app"
-          common=(--silent --show-error --location-trusted --retry 3 --retry-delay 3 --max-time 60)
+          common=(--silent --show-error --retry 3 --retry-delay 3 --max-time 60)
           nav=(-H "Sec-Fetch-Site: cross-site" -H "Sec-Fetch-Mode: navigate" -H "Sec-Fetch-Dest: document")
           code=$(curl "${common[@]}" -D /tmp/index.headers -o /tmp/index.html -w '%{http_code}' "${nav[@]}" "$site/")
           echo "External top-level navigation: $code"
