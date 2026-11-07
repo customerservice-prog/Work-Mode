@@ -6,9 +6,20 @@ globalThis.WorkModeTabPolicy = (() => {
   function supportedUrl(raw) {
     try {
       const u=new URL(raw);
+      const host=u.hostname.toLowerCase().replace(/^\\[|\\]$/g,'');
+      const octets=host.split('.').map(Number);
+      const isIpv4=octets.length===4 && octets.every(n=>Number.isInteger(n)&&n>=0&&n<=255);
+      const privateIp=isIpv4 && (octets[0]===0||octets[0]===10||octets[0]===127||
+        octets[0]>=224||(octets[0]===169&&octets[1]===254)||
+        (octets[0]===172&&octets[1]>=16&&octets[1]<=31)||
+        (octets[0]===192&&octets[1]===168)||
+        (octets[0]===100&&octets[1]>=64&&octets[1]<=127));
+      const privateV6=host.includes(':')&&(/^(::|::1|fc|fd|fe8|fe9|fea|feb)/.test(host));
       return ['http:','https:'].includes(u.protocol) &&
-        !['localhost','127.0.0.1','::1','[::1]'].includes(u.hostname) &&
-        !u.hostname.endsWith('.internal') && !u.username && !u.password;
+        !['localhost','metadata','metadata.google.internal'].includes(host) &&
+        !host.endsWith('.internal') && !host.endsWith('.local') &&
+        !privateIp && !privateV6 &&
+        !u.username && !u.password;
     } catch{return false;}
   }
   function fromWorkMode(sender) {
