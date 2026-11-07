@@ -17,7 +17,7 @@ globalThis.WorkModeTabPolicy = (() => {
   function isSecret(meta) {return SECRET.test([meta?.label,meta?.name,meta?.type,meta?.placeholder].filter(Boolean).join(' '));}
   function highImpact(meta) {return HIGH.test([meta?.label,meta?.text,meta?.type,meta?.title].filter(Boolean).join(' '));}
   function allowAction(action) {
-    return ['status','inspect','click','fill','scroll','navigate','verify','tabs','back','screenshot'].includes(action);
+    return ['status','inspect','click','fill','scroll','navigate','verify','tabs','back','screenshot','verify_post'].includes(action);
   }
   return Object.freeze({SITE,supportedUrl,fromWorkMode,isSecret,highImpact,allowAction});
 })();
