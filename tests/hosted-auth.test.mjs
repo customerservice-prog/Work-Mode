@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { requestWithHost } from './_http-client.mjs';
 import { createHostedAuth } from '../lib/hosted-auth.js';
 
@@ -82,4 +85,46 @@ test('hosted mode fails closed without strong credentials or HTTPS origin', () =
   assert.throws(()=>createHostedAuth({enabled:true,origin:'https://example.com',password:'short',secret:'s'.repeat(50)}));
   assert.throws(()=>createHostedAuth({enabled:true,origin:'https://example.com',password:'a'.repeat(25),secret:'short'}));
   assert.equal(createHostedAuth({enabled:false}).enabled,false);
+});
+
+test('hosted login session survives a server restart and logout revokes it persistently', {timeout:12000}, async () => {
+  const directory = mkdtempSync(path.join(tmpdir(), 'workmode-auth-'));
+  const config = {
+    enabled: true, origin: 'https://workmode.example.com',
+    password: 'strong-passphrase-for-integration',
+    secret: 'test-secret-exceeds-thirty-two-characters',
+    sessionFile: path.join(directory, 'sessions.json')
+  };
+  let security = createHostedAuth(config);
+  const app = express();
+  app.use(express.json());
+  app.use((req,res,next) => security.middleware(req,res,next));
+  app.get('/api/secret', (_req,res) => res.json({private:true}));
+  const server = app.listen(0,'127.0.0.1');
+  await new Promise(resolve => server.once('listening',resolve));
+  const root = 'http://127.0.0.1:' + server.address().port;
+  const request = (endpoint, options={}) => requestWithHost(root,endpoint,{
+    host:'workmode.example.com',...options
+  });
+  try {
+    const login = await request('/api/auth/login',{
+      method:'POST',origin:'https://workmode.example.com',
+      body:{password:config.password}
+    });
+    assert.equal(login.status,200);
+    const cookie = login.headers.get('set-cookie').split(';')[0];
+    assert.equal((await request('/api/secret',{cookie})).status,200);
+    security = createHostedAuth(config);
+    assert.equal((await request('/api/secret',{cookie})).status,200);
+    const logout = await request('/api/auth/logout',{
+      method:'POST',origin:'https://workmode.example.com',cookie
+    });
+    assert.equal(logout.status,200);
+    security = createHostedAuth(config);
+    assert.equal((await request('/api/secret',{cookie})).status,401);
+  } finally {
+    server.closeAllConnections();
+    await new Promise(resolve=>server.close(resolve));
+    rmSync(directory,{recursive:true,force:true});
+  }
 });

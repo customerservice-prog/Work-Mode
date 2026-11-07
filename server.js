@@ -22,7 +22,13 @@ const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
 const CLOUD_CONTAINER_BROWSER = CLOUD_MODE && process.env.WORKMODE_CONTAINER_BROWSER === '1';
 const CLOUD_MODEL_MAX_OUTPUT = CLOUD_MODE ? 1600 : undefined;
 const CLOUD_TOKEN_PER_TASK = Math.max(2000, Math.min(80000, Number(process.env.WORKMODE_TASK_TOKEN_LIMIT) || 30000));
-const hostedSecurity = createHostedAuth({ enabled: CLOUD_MODE, origin: process.env.WORKMODE_CLOUD_ORIGIN, password: process.env.WORKMODE_CLOUD_PASSWORD, secret: process.env.WORKMODE_SESSION_SECRET });
+const hostedSecurity = createHostedAuth({
+  enabled: CLOUD_MODE,
+  origin: process.env.WORKMODE_CLOUD_ORIGIN,
+  password: process.env.WORKMODE_CLOUD_PASSWORD,
+  secret: process.env.WORKMODE_SESSION_SECRET,
+  ...(CLOUD_MODE ? { sessionFile: path.join(process.env.WORKMODE_DATA_DIR || '/data', 'auth-sessions.json') } : {})
+});
 
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
 const MAX_STEPS = Math.min(CLOUD_MODE ? 30 : 80, Math.max(2, Number(process.env.MAX_STEPS) || (CLOUD_MODE ? 20 : 40)));

@@ -34,7 +34,7 @@ test('cloud app does not auto-open a nonfunctional API-key dialog; shows actual 
       await page.addScriptTag({content:remote});
       await page.waitForFunction(() =>
         document.body.classList.contains('cloud-mode') &&
-        document.getElementById('cloudBannerText').textContent.includes('secure remote browser'));
+        document.getElementById('cloudBannerText').textContent.includes('remote browser cannot start'));
       assert.equal(await page.locator('#settingsDialog').evaluate(x=>x.open),false,
         'Cloud UI must not automatically open the API-key dialog');
       assert.equal(await page.locator('#cloudSetupBanner').isVisible(),true);
