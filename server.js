@@ -14,6 +14,7 @@ import { detectOllama, pullOllama } from './lib/local-ai.js';
 import { createHostedAuth } from './lib/hosted-auth.js';
 import { cloudRequirements, assertCloudRequirements } from './lib/cloud-config.js';
 import { createTokenBudget } from './lib/cloud-budget.js';
+import { parseBasicCommand, BASIC_HELP } from './lib/basic-commands.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
@@ -496,6 +497,102 @@ async function effectiveSettings() {
   };
   return readSettings();
 }
+async function runBasicBrowserCommand(input) {
+  const command = parseBasicCommand(input);
+  if (command.kind === 'greeting') {
+    SESSION.answer = 'Hi! Basic browser commands are working without an AI API. Tell me a specific browser action, or type "help" to see examples.';
+    SESSION.phase = 'done';
+    return;
+  }
+  if (command.kind === 'help' || command.kind === 'unsupported') {
+    SESSION.answer = (command.kind === 'unsupported'
+      ? 'I could not match that to a supported browser command, and I have not attempted any action.\n\n'
+      : '') + BASIC_HELP;
+    SESSION.phase = 'done';
+    return;
+  }
+  const action = async (name, args) => {
+    SESSION.steps++;
+    log('Basic command action: ' + name);
+    return executeTool(name, args);
+  };
+  if (command.kind === 'navigate' || command.kind === 'new_tab') {
+    const result = await action(command.kind === 'new_tab' ? 'open_tab' : 'navigate', { url: command.url });
+    const page = await ensureBrowser();
+    const title = (await page.title().catch(() => '')).slice(0, 180) || '(no page title)';
+    SESSION.answer = 'Opened ' + result.url + '\nVerified page title: ' + title;
+    if (command.reportText) {
+      const snapshot = await readPage();
+      SESSION.answer += '\n\nVisible page text excerpt (not an AI summary):\n' +
+        String(snapshot.text || '').slice(0, 1250);
+    }
+  } else if (command.kind === 'read' || command.kind === 'title') {
+    const snapshot = await readPage();
+    SESSION.steps++;
+    SESSION.answer = 'Current page: ' + snapshot.url + '\nTitle: ' + snapshot.title;
+    if (command.kind === 'read') {
+      SESSION.answer += '\n\nPage text excerpt (not AI analysis):\n' +
+        String(snapshot.text || '').slice(0, 1600) +
+        (snapshot.text.length > 1600 ? '\n[Excerpt shortened]' : '');
+    }
+  } else if (command.kind === 'tabs') {
+    const result = await action('list_tabs', {});
+    SESSION.answer = result.tabs.length ? result.tabs.map(t =>
+      'Tab ' + t.index + (t.active ? ' (active)' : '') + ': ' + t.title + ' — ' + t.url
+    ).join('\n') : 'No browser tabs open.';
+  } else if (command.kind === 'screenshot') {
+    await ensureBrowser();
+    await refreshImage();
+    SESSION.steps++;
+    SESSION.answer = 'Captured the current page in the browser preview. Please review it on the right.';
+  } else if (command.kind === 'verify') {
+    const result = await action('verify_page', { kind: command.kindToCheck, expected: command.expected });
+    SESSION.answer = (result.verified ? 'VERIFIED: ' : 'NOT VERIFIED: ') +
+      'Page ' + result.kind + ' contains "' + command.expected + '".\nPage: ' + result.url;
+  } else if (['back','scroll','switch_tab','press_key'].includes(command.kind)) {
+    const names = {back:'go_back',scroll:'scroll_page',switch_tab:'switch_tab',press_key:'press_key'};
+    const args = command.kind === 'scroll' ? {direction:command.direction} :
+      command.kind === 'switch_tab' ? {index:command.index} :
+      command.kind === 'press_key' ? {key:command.key} : {};
+    const result = await action(names[command.kind], args);
+    SESSION.answer = result.ok === false
+      ? 'Action was not completed: ' + (result.approval || 'not permitted')
+      : 'Browser action completed: ' + names[command.kind] + '. Review the page preview to verify the desired outcome.';
+  } else if (command.kind === 'click' || command.kind === 'fill') {
+    const snapshot = await readPage();
+    SESSION.steps++;
+    const needle = String(command.label).toLowerCase();
+    const matches = snapshot.controls.filter(el => {
+      const label = String(el.label || '').toLowerCase();
+      return label === needle || (label.length && label.includes(needle));
+    });
+    if (!matches.length) {
+      SESSION.answer = 'No visible control matched "' + command.label +
+        '". Open or scroll to the right page, then try a precise button or field label. No action was taken.';
+      SESSION.phase = 'done';
+      return;
+    }
+    const exact = matches.filter(el => String(el.label || '').toLowerCase() === needle);
+    const chosen = exact.length === 1 ? exact[0] : matches.length === 1 ? matches[0] : null;
+    if (!chosen) {
+      SESSION.answer = 'Multiple controls matched "' + command.label + '" (' +
+        matches.slice(0, 5).map(el => el.label + ' [id ' + el.id + ']').join(', ') +
+        '). No action was taken; use a more specific label.';
+      SESSION.phase = 'done';
+      return;
+    }
+    const result = await action(command.kind === 'click' ? 'click_element' : 'fill_element',
+      command.kind === 'click' ? {id:chosen.id} : {id:chosen.id, text:command.value});
+    SESSION.answer = result.ok === false
+      ? 'Action was not completed: ' + (result.approval || 'not permitted')
+      : (command.kind === 'click' ? 'Clicked ' : 'Filled the non-secret field ') +
+        '"' + chosen.label + '". The action completed, but the final webpage outcome has not been verified.';
+  } else {
+    SESSION.answer = BASIC_HELP;
+  }
+  SESSION.phase = 'done';
+}
+
 async function runTask(task) {
   SESSION.busy = true;
   SESSION.steps = 0;
@@ -507,8 +604,12 @@ async function runTask(task) {
   stopped = false;
   notify('status', { phase: SESSION.phase, task });
   try {
-    if (cloudBudget) await cloudBudget.requireAvailable();
     const settings = await effectiveSettings();
+    if (CLOUD_MODE && !settings.apiKey?.trim()) {
+      await runBasicBrowserCommand(task);
+      return;
+    }
+    if (cloudBudget) await cloudBudget.requireAvailable();
     const useLocalAI = !CLOUD_MODE && settings.provider === 'ollama';
     if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error(CLOUD_MODE
