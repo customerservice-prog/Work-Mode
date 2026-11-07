@@ -1,8 +1,8 @@
 {
   "name": "work-mode",
   "productName": "Work-Mode",
-  "version": "0.3.0",
-  "description": "Local AI browser assistant for Windows",
+  "version": "0.6.0-beta.1",
+  "description": "Private cross-device browser agent beta; basic commands without API and optional self-hosted AI",
   "private": true,
   "type": "module",
   "main": "desktop/main.mjs",
