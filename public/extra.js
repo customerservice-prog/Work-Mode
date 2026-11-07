@@ -51,7 +51,10 @@ async function refreshTabBar() {
 async function refreshHistoryList() {
   const root = extraEl('historyList');
   try {
-    const { history } = await extraApi('/api/history');
+    const mode = await extraApi('/api/mode');
+    const history = mode.cloud
+      ? (await extraApi('/api/task-journal')).tasks
+      : (await extraApi('/api/history')).history;
     root.replaceChildren();
     if (!history.length) { root.textContent = 'No completed tasks yet'; return; }
     for (const item of history.slice(0, 7)) {
@@ -59,13 +62,15 @@ async function refreshHistoryList() {
       btn.className = 'historyItem';
       btn.textContent = item.task.slice(0, 80);
       const subtitle = document.createElement('span');
-      subtitle.textContent = new Date(item.finishedAt).toLocaleString() + ' · ' + item.phase;
+      subtitle.textContent = new Date(item.finishedAt || item.updatedAt || item.startedAt).toLocaleString() + ' · ' + item.phase;
       btn.appendChild(subtitle);
       btn.onclick = () => {
-        extraEl('taskInput').value =
-          'Continue this earlier task if unfinished: ' + item.task +
-          '\nPrevious outcome: ' + item.phase + ' — ' + item.answer +
-          '\nInspect the live browser first and verify before saying it is done.';
+        extraEl('taskInput').value = item.phase === 'interrupted'
+          ? 'Review the live website and check what happened before retrying this interrupted task: ' + item.task +
+            '\nDo not repeat consequential actions without checking their actual outcome first.'
+          : 'Review this earlier task: ' + item.task +
+            '\nPrevious outcome: ' + item.phase + ' — ' + item.answer +
+            '\nInspect the live browser before making any new changes.';
         extraEl('taskInput').focus();
       };
       root.appendChild(btn);
