@@ -91,6 +91,12 @@ async function submit() {
   $('taskInput').value = '';
   bubble(task, 'user');
   $('runTask').disabled = true;
+  if (window.workModeEdgeMode && typeof window.workModeRunEdgeCommand === 'function') {
+    setPhase('running');
+    try { bubble(await window.workModeRunEdgeCommand(task), 'ai'); setPhase('done'); }
+    catch (e) { bubble('Edge tab action failed: ' + e.message, 'ai'); setPhase('error'); }
+    return;
+  }
   try { await api('/api/tasks', { task }); setPhase('running'); }
   catch (e) { bubble(e.message, 'ai'); setPhase('idle'); }
 }
