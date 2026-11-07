@@ -40,5 +40,18 @@ jobs:
           node --check public/mobile.js
           node --check lib/local-ai.js
           node --check public/settings.js
+          node --check public/edge-tabs.js
+          node --check public/edge-facebook.js
+          node --check extension/background.js
+          node --check extension/bridge.js
+          node --check extension/popup.js
+          node --check extension/policy.js
+      - name: Package Edge connector
+        uses: actions/upload-artifact@v4
+        with:
+          name: Work-Mode-Edge-Connector
+          path: extension/
+          if-no-files-found: error
+          retention-days: 30
       - name: Local server smoke test
         run: timeout 85s npm test
