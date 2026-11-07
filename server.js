@@ -49,7 +49,7 @@ async function verifyCloudBrowserIsolation() {
   try {
     testBrowser = await chromium.launch({
       ...(CLOUD_MODE ? { channel: 'chromium' } : {}),
-      headless: true, chromiumSandbox: true, timeout: 25000
+      headless: true, chromiumSandbox: true, args: ['--disable-namespace-sandbox'], timeout: 25000
     });
     const page = await testBrowser.newPage();
     await page.goto('data:text/html,<title>Work-Mode isolated browser test</title>', {timeout:10000});
@@ -133,6 +133,7 @@ async function launchBrowser() {
     ...(CLOUD_MODE ? { channel: 'chromium' } : process.env.WORKMODE_DESKTOP === '1' ? { channel: 'msedge' } : {}),
     headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
     chromiumSandbox: CLOUD_MODE && process.env.NODE_ENV !== 'test',
+    ...(CLOUD_MODE ? { args: ['--disable-namespace-sandbox'] } : {}),
     viewport: { width: 1200, height: 820 },
     acceptDownloads: false
   });
