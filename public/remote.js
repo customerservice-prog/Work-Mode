@@ -46,7 +46,8 @@ async function refreshCloudUsage() {
 function applyCloudReadiness(state) {
   const aiReady = Boolean(state.aiConfigured);
   const storageReady = Boolean(state.dataDirectoryConfigured && state.dataDirectoryWritable && state.volumeAttached);
-  const browserReady = storageReady && Boolean(state.browserInstalled) && state.browserSandboxStatus === 'passed';
+  const browserReady = storageReady && Boolean(state.browserInstalled) && ['passed','container-isolated'].includes(state.browserSandboxStatus);
+  const containerOnly = state.browserSandboxStatus === 'container-isolated';
   const canRun = aiReady && browserReady;
   window.workModeCloudBlocked = !canRun;
   window.workModeCloudBrowserBlocked = !browserReady;
@@ -54,8 +55,9 @@ function applyCloudReadiness(state) {
 
   const issues = [];
   if (!aiReady) issues.push('AI is not connected to Railway');
-  if (state.browserSandboxStatus === 'failed') issues.push('the secure remote browser cannot start on this host');
-  else if (state.browserSandboxStatus !== 'passed') issues.push('secure browser startup has not been confirmed');
+  if (state.browserSandboxStatus === 'failed') issues.push('the remote browser cannot start on this host');
+  else if (!browserReady) issues.push('remote browser startup has not been confirmed');
+  if (containerOnly) issues.push('browser uses Railway container isolation without Chromium sandbox; avoid untrusted sites with sensitive accounts');
   if (!storageReady) issues.push('browser storage is not fully ready');
   if (!state.browserInstalled) issues.push('the browser executable is missing');
 
@@ -64,11 +66,13 @@ function applyCloudReadiness(state) {
   if (!canRun) {
     $r('cloudBannerTitle').textContent = 'Work-Mode needs server setup';
     $r('cloudBannerText').textContent = issues.join('; ') +
-      '. These are server-side issues, not a problem with your computer. Tasks are paused until fixed.';
+      '. These are server-side settings, not a problem with your computer. Manual browsing may be available even if AI tasks are paused.';
   }
-  $r('cloudStatus').textContent = canRun
-    ? 'Basic AI, browser and storage checks passed. Verify individual actions before relying on them.'
-    : 'Workspace not ready: ' + issues.join('; ') + '.';
+  $r('cloudStatus').textContent = containerOnly
+    ? 'Browser works with non-root Railway container isolation; Chromium sandbox is off. AI tasks: ' + (aiReady ? 'configured' : 'not configured') + '.'
+    : canRun
+      ? 'Basic AI, browser and storage checks passed. Verify individual actions before relying on them.'
+      : 'Workspace not ready: ' + issues.join('; ') + '.';
 
   const runButton = $r('runTask');
   if (runButton) {

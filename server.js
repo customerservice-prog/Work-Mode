@@ -17,6 +17,9 @@ import { createTokenBudget } from './lib/cloud-budget.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
+// Railway does not expose Chromium's namespace sandbox permissions in standard containers.
+// This explicitly opted-in fallback is restricted to an unprivileged Railway process.
+const CLOUD_CONTAINER_BROWSER = CLOUD_MODE && process.env.WORKMODE_CONTAINER_BROWSER === '1';
 const CLOUD_MODEL_MAX_OUTPUT = CLOUD_MODE ? 1600 : undefined;
 const CLOUD_TOKEN_PER_TASK = Math.max(2000, Math.min(80000, Number(process.env.WORKMODE_TASK_TOKEN_LIMIT) || 30000));
 const hostedSecurity = createHostedAuth({ enabled: CLOUD_MODE, origin: process.env.WORKMODE_CLOUD_ORIGIN, password: process.env.WORKMODE_CLOUD_PASSWORD, secret: process.env.WORKMODE_SESSION_SECRET });
@@ -47,15 +50,21 @@ async function verifyCloudBrowserIsolation() {
   if (!CLOUD_MODE) return;
   let testBrowser;
   try {
+    if (CLOUD_CONTAINER_BROWSER &&
+        (!process.env.RAILWAY_SERVICE_ID || typeof process.getuid !== 'function' || process.getuid() === 0)) {
+      throw Error('Container-only Chromium requires an unprivileged Railway runtime');
+    }
     testBrowser = await chromium.launch({
-      ...(CLOUD_MODE ? { channel: 'chromium' } : {}),
-      headless: true, chromiumSandbox: true, args: ['--disable-namespace-sandbox'], timeout: 25000
+      ...(CLOUD_CONTAINER_BROWSER ? {} : { channel: 'chromium' }),
+      headless: true, chromiumSandbox: !CLOUD_CONTAINER_BROWSER, timeout: 25000
     });
     const page = await testBrowser.newPage();
     await page.goto('data:text/html,<title>Work-Mode isolated browser test</title>', {timeout:10000});
     if ((await page.title()) !== 'Work-Mode isolated browser test') throw Error('Browser test could not load a local page');
-    cloudBrowserTest = { status:'passed' };
-    console.log('Work-Mode isolated Chromium browser startup passed.');
+    cloudBrowserTest = { status:CLOUD_CONTAINER_BROWSER ? 'container-isolated' : 'passed' };
+    console.log(CLOUD_CONTAINER_BROWSER
+      ? 'Work-Mode Chromium started as non-root within a Railway container; Chromium browser sandbox is DISABLED.'
+      : 'Work-Mode isolated Chromium browser startup passed.');
   } catch(err) {
     cloudBrowserTest = { status:'failed' };
     console.error('Work-Mode secure Chromium startup is unavailable:',String(err.message||err).slice(-1500));
@@ -130,10 +139,9 @@ let lastBrowserUse = Date.now();
 async function launchBrowser() {
   await fs.mkdir(DATA_ROOT, { recursive: true, mode: 0o700 });
   const fresh = await chromium.launchPersistentContext(BROWSER_DIR, {
-    ...(CLOUD_MODE ? { channel: 'chromium' } : process.env.WORKMODE_DESKTOP === '1' ? { channel: 'msedge' } : {}),
+    ...(CLOUD_MODE && !CLOUD_CONTAINER_BROWSER ? { channel: 'chromium' } : process.env.WORKMODE_DESKTOP === '1' && !CLOUD_MODE ? { channel: 'msedge' } : {}),
     headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
-    chromiumSandbox: CLOUD_MODE && process.env.NODE_ENV !== 'test',
-    ...(CLOUD_MODE ? { args: ['--disable-namespace-sandbox'] } : {}),
+    chromiumSandbox: CLOUD_MODE && !CLOUD_CONTAINER_BROWSER && process.env.NODE_ENV !== 'test',
     viewport: { width: 1200, height: 820 },
     acceptDownloads: false
   });
@@ -815,7 +823,9 @@ app.get('/api/cloud/readiness', async (_req,res) => {
       dataDirectoryWritable,
       browserInstalled,
       browserSandboxStatus:cloudBrowserTest.status,
-      warning:'These checks do not prove that storage is persistent, the cloud bill is current, or Chromium isolation is secure.'
+      warning: CLOUD_CONTAINER_BROWSER
+        ? 'Chromium sandbox is disabled. Browser runs as a non-root process inside Railway container isolation, which is not equivalent to Chromium process sandboxing. Do not browse untrusted sites with sensitive accounts.'
+        : 'These checks do not prove that storage is persistent, the cloud bill is current, or Chromium isolation is secure.'
     });
   } catch {
     res.status(500).json({error:'Cannot check hosted configuration'});
