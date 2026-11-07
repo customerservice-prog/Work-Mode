@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Work-Mode Edge Tab Connector",
+  "version": "0.1.0",
+  "description": "Connect one explicitly approved Edge tab to Work-Mode without a browser API subscription.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://work-mode-production.up.railway.app/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://work-mode-production.up.railway.app/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
