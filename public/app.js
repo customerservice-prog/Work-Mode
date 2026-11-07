@@ -107,6 +107,11 @@ async function init() {
     if (s.browserUrl) $('browserUrl').textContent = s.browserUrl;
     if (s.approval) approval(s.approval);
     if (s.answer) bubble(s.answer, 'ai');
+    if (s.recoveredTask && !window.workModeRecoveryShown) {
+      window.workModeRecoveryShown=true;
+      bubble('Previous task was interrupted after the server restarted: ' +
+        s.recoveredTask.task + '\n' + s.recoveredTask.answer, 'ai');
+    }
   } catch (e) {
     $('stateLabel').textContent = 'Cannot reach local server';
     entry({ message: e.message });
@@ -119,6 +124,10 @@ async function init() {
     if (data.type === 'approval') approval(data);
     if (data.type === 'approval-cleared') approval(null);
     if (data.type === 'status') {
+      if (data.recoveredTask && !window.workModeRecoveryShown) {
+        window.workModeRecoveryShown=true;
+        bubble('Previous task interrupted: ' + data.recoveredTask.task + '\n' + data.recoveredTask.answer, 'ai');
+      }
       setPhase(data.phase);
       if (data.answer && ['done','error','stopped','limited'].includes(data.phase)) bubble(data.answer, 'ai');
     }
