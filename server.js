@@ -15,6 +15,7 @@ import { createHostedAuth } from './lib/hosted-auth.js';
 import { cloudRequirements, assertCloudRequirements } from './lib/cloud-config.js';
 import { createTokenBudget } from './lib/cloud-budget.js';
 import { parseBasicCommand, BASIC_HELP } from './lib/basic-commands.js';
+import { hostedAI } from './lib/hosted-ai.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
@@ -490,11 +491,11 @@ const POLICY = [
   'The agent can only control its own Playwright browser, not the user existing Edge or Chrome tabs.'
 ].join('\n');
 async function effectiveSettings() {
-  if (CLOUD_MODE) return {
-    provider: 'openai',
-    apiKey: String(process.env.OPENAI_API_KEY || ''),
-    openaiModel: String(process.env.OPENAI_MODEL || 'gpt-4.1-mini')
-  };
+  if (CLOUD_MODE) {
+    const ai = hostedAI();
+    return {provider:ai.mode, mode:ai.mode, model:ai.model,
+      apiKey:ai.apiKey, baseURL:ai.baseURL, openaiModel:ai.model};
+  }
   return readSettings();
 }
 async function runBasicBrowserCommand(input) {
@@ -605,12 +606,14 @@ async function runTask(task) {
   notify('status', { phase: SESSION.phase, task });
   try {
     const settings = await effectiveSettings();
-    if (CLOUD_MODE && !settings.apiKey?.trim()) {
+    if (CLOUD_MODE && settings.mode === 'basic') {
       await runBasicBrowserCommand(task);
       return;
     }
-    if (cloudBudget) await cloudBudget.requireAvailable();
+    const isCompatible = CLOUD_MODE && settings.mode === 'compatible';
     const useLocalAI = !CLOUD_MODE && settings.provider === 'ollama';
+    const useStateless = useLocalAI || isCompatible;
+    if (cloudBudget && !isCompatible) await cloudBudget.requireAvailable();
     if (!useLocalAI && !settings.apiKey?.trim()) {
       throw new Error(CLOUD_MODE
         ? 'The website is online, but AI is not connected yet. Add a separately billed OPENAI_API_KEY in Railway Variables to enable AI tasks. You can still use manual browser controls.'
@@ -625,28 +628,29 @@ async function runTask(task) {
     const client = new OpenAI({
       apiKey: useLocalAI ? 'ollama' : settings.apiKey,
       timeout: 70000, maxRetries: 1,
-      ...(useLocalAI ? { baseURL: 'http://127.0.0.1:11434/v1' } : {}),
+      ...(useLocalAI ? { baseURL: 'http://127.0.0.1:11434/v1' } :
+        isCompatible ? { baseURL: settings.baseURL } : {}),
       ...(process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_AI_BASE_URL
         ? { baseURL: process.env.WORKMODE_TEST_AI_BASE_URL } : {})
     });
-    const model = useLocalAI ? settings.ollamaModel : settings.openaiModel;
+    const model = isCompatible ? settings.model : useLocalAI ? settings.ollamaModel : settings.openaiModel;
     // The default local Qwen3 model is text-only. Keep screenshot previews
     // visible to the user, but do not send image inputs to a text-only model.
-    const activeTools = useLocalAI
+    const activeTools = useStateless
       ? browserTools.filter(tool => tool.name !== 'inspect_visual')
       : browserTools;
-    const activePolicy = useLocalAI
+    const activePolicy = useStateless
       ? POLICY.replace('Use inspect_visual and verify_page to ground conclusions; do not guess from page text alone.',
         'Use read_page and verify_page to ground conclusions. You cannot interpret screenshots in this local text-only AI mode. Never claim to have visually inspected the page.')
       : POLICY;
     const transcript = [{ role: 'user', content: task }];
-    const modelOptions = useLocalAI ? {} : { parallel_tool_calls: false };
+    const modelOptions = useStateless ? {} : { parallel_tool_calls: false };
     let response = await client.responses.create({
       model, instructions: activePolicy, tools: activeTools, ...modelOptions,
       ...(CLOUD_MODE ? { max_output_tokens: CLOUD_MODEL_MAX_OUTPUT } : {}),
       input: transcript
     });
-    if (cloudBudget) await cloudBudget.recordUsage(response.usage);
+    if (cloudBudget && !isCompatible) await cloudBudget.recordUsage(response.usage);
     let taskTokensUsed = Number(response.usage?.total_tokens || 0);
     for (let step = 0; step < MAX_STEPS; step++) {
       if (stopped) throw new Error('Stopped by user');
@@ -688,15 +692,15 @@ async function runTask(task) {
           ]
         });
       }
-      if (useLocalAI) transcript.push(...response.output, ...inputs);
-      if (cloudBudget) await cloudBudget.requireAvailable();
+      if (useStateless) transcript.push(...response.output, ...inputs);
+      if (cloudBudget && !isCompatible) await cloudBudget.requireAvailable();
       response = await client.responses.create({
-        model, instructions: activePolicy, input: useLocalAI ? transcript : inputs,
-        ...(!useLocalAI ? { previous_response_id: response.id } : {}),
+        model, instructions: activePolicy, input: useStateless ? transcript : inputs,
+        ...(!useStateless ? { previous_response_id: response.id } : {}),
         tools: activeTools, ...modelOptions,
         ...(CLOUD_MODE ? { max_output_tokens: CLOUD_MODEL_MAX_OUTPUT } : {})
       });
-      if (cloudBudget) await cloudBudget.recordUsage(response.usage);
+      if (cloudBudget && !isCompatible) await cloudBudget.recordUsage(response.usage);
       taskTokensUsed += Number(response.usage?.total_tokens || 0);
     }
     SESSION.phase = 'limited';
@@ -768,7 +772,9 @@ app.post('/api/local-ai/cancel', (_req, res) => {
 app.get('/api/settings', async (_req, res) => {
   try {
     const settings = CLOUD_MODE
-      ? { provider:'openai', cloud:true, openaiModel:process.env.OPENAI_MODEL || 'gpt-4.1-mini', hasApiKey:Boolean(process.env.OPENAI_API_KEY) }
+      ? (() => { const ai=hostedAI(); return {provider:ai.mode === 'compatible' ? 'compatible' : 'openai',
+        cloud:true, openaiModel:ai.model, hasApiKey:ai.configured,
+        aiBackend:ai.mode}; })()
       : await getPublicSettings();
     res.json(settings);
   }
@@ -925,6 +931,7 @@ app.get('/api/cloud/readiness', async (_req,res) => {
     res.set('Cache-Control','no-store').json({
       hosted:true,
       aiConfigured:checks.aiConfigured,
+      aiBackend:hostedAI().mode,
       dataDirectoryConfigured,
       volumeAttached:checks.volumeAttached,
       dataDirectoryWritable,
