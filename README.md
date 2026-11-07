@@ -1,42 +1,56 @@
-# Work-Mode — AI Browser Assistant
+# Work-Mode — Browser Agent (Cloud Beta)
 
-**Work-Mode is being developed as one private assistant for iPad, phone, Windows, and inexpensive laptops.** The cross-device edition is an **unreleased prototype** in a feature branch; it has not been deployed to a public cloud URL.
+**Status: beta, not a complete replacement for ChatGPT Work.** The hosted version is accessible at https://work-mode-production.up.railway.app/ and runs on Railway. The Windows offline Lite v0.5.0 installer remains separate and unchanged.
 
-## What you'll use
+## Features implemented
 
-On any device, open a secure HTTPS Work-Mode website and sign in. Chat with the assistant, watch a remote browser, approve consequential actions, and take manual control for logins through a touchscreen. On iPhone, iPad or Android, add the page to your Home Screen.
+- Owner-only sign-in over HTTPS with protected APIs, HttpOnly cookies, rate-limited login, and persistent sessions.
+- Private password rotation from Cloud status (requires current password; revokes old sessions).
+- One remote Playwright Chromium browser, browser preview, tabs, navigation, touch, keyboard and owner-approved consequential actions.
+- Basic browser commands without an AI subscription or per-message API fee. Type `Help` to see the supported commands. **These are deterministic actions, not autonomous AI.**
+- Optional advanced AI via an OpenAI API key **or** an owner-hosted OpenAI Responses-compatible endpoint, e.g., recent Ollama. Compatible inference requires its own computing environment; it is not provisioned by this repository.
+- Private mounted storage for browser profile and task metadata.
+- Encrypted task checkpoints and task history on cloud, plus recovery that marks interrupted work without blindly redoing high-impact actions.
+- Automated HTTP, hosted-authentication, browser, provider, journal, and responsive-UI tests.
 
-The AI and website browser run on a hosted computer, **not on your phone/iPad/laptop**. This removes the need to install Ollama or a huge AI model on every device. It does require hosting and metered AI resources; it does not consume ChatGPT Work credits.
+## Major limitations
 
-## Existing Windows download
+- **No free, capable hosted AI is included.** Without a configured inference server or API, Work-Mode offers only predefined browser commands.
+- The Railway browser starts without Chromium's process sandbox due to host restrictions. Container isolation is **not equivalent**. Avoid sensitive logins and arbitrary untrusted websites. A properly isolated browser worker is required before claiming production-ready safe automation.
+- A single in-memory running task and owner session are supported. Checkpoints survive restarts, but interrupted tasks require deliberate review and restart; no unattended replay.
+- GitHub coding, code execution, autonomous PR creation, and deploy approval are not yet built into the standalone Work-Mode web app.
+- Phone/iPad browser layouts have automated checks, but physical-device sign-in and real-world website compatibility have not all been verified.
+- Browser profile may contain sensitive cookies. Storage encryption and independent off-host backups must be verified separately; application encryption of task records does not encrypt the Chromium profile.
+- This Railway service and self-hosted inference consume hosting resources and may generate charges. Neither unlimited free cloud inference nor unlimited computing capacity can be guaranteed.
 
-The already-published [Work-Mode Desktop v0.3.0 installer](https://github.com/customerservice-prog/Work-Mode/releases/tag/v0.3.0) remains a **local-only early release**. It is not yet the cross-device edition. Auto-Coder is separate and untouched.
+## Run modes
 
-## Cross-device edition status
+### Hosted basics (no AI model)
 
-The feature branch adds:
-- Responsive mobile/tablet chat and browser views
-- A web app manifest and safe-to-install Home Screen shell
-- Password-gated hosted access, protected API endpoints, and session cookies
-- A browser running on the server, streamed as screenshots to your device
-- Touch/click, typing, navigation, scrolling, and keyboard controls for the remote browser
-- Private browser-session and history storage on a mounted host volume
-- A host container configuration and automated authentication tests
+Deploy the `feature/cross-device-cloud` branch. Configure `WORKMODE_CLOUD_MODE=1`,
+`WORKMODE_CLOUD_ORIGIN`, `WORKMODE_CLOUD_PASSWORD` (16+ chars),
+`WORKMODE_SESSION_SECRET` (32+ chars), and `WORKMODE_DATA_DIR=/data` with a mounted persistent volume.
+A browser command such as `Open https://www.google.com and tell me the page title` does not need an OpenAI API key.
 
-**It has NOT yet been published as a working cloud service.** Before real use it needs secure hosting, persistent encrypted storage, an isolated browser sandbox, a private HTTPS URL, and a funded AI provider. It also needs end-to-end testing against real sites on actual iPad and phone devices.
+### Optional self-hosted AI
 
-See [Cross-device architecture and deployment requirements](docs/CROSS-DEVICE.md).
+Set the following **private server environment variables**:
 
-## Security and costs
+- `WORKMODE_AI_BASE_URL`: HTTPS OpenAI-compatible `/v1` URL or a private `http://name.railway.internal:port/v1` endpoint.
+- `WORKMODE_AI_MODEL`: model name hosted by that server.
+- `WORKMODE_AI_API_KEY`: only if the compatible endpoint requires bearer authentication.
 
-Only run hosted mode on a protected HTTPS address with strong, privately configured host secrets. The browser may contain sensitive signed-in website sessions; do not expose it publicly. A screenshot is not proof that a site action completed. High-impact agent clicks require approval. The current prototype is intended for one trusted owner, not multiple accounts.
+The compatible endpoint must support the OpenAI Responses API and function calling. The implementation uses stateless transcripts and does not send screenshot images to a text-only endpoint. Hosted AI server availability, hardware, model quality, and fees are independent of Work-Mode.
 
-Remote browsing and AI calls require a cloud computer and AI provider. There is no legitimate way to guarantee unlimited cost-free cloud use. The cross-device prototype now includes persistent per-task, daily, and monthly token ceilings and an owner-visible usage counter. These are **not dollar limits**; you must separately restrict spending with the API provider. Browser security and hosting still need live verification.
+Alternatively, configure `OPENAI_API_KEY` (and optionally `OPENAI_MODEL`) for a separately billed OpenAI API. Token ceilings apply to that option, not the self-hosted endpoint.
 
-## Development
+### Offline Windows
 
-Install Node 22+ and dependencies with `npm install`; the local-only application runs using `npm start` and the existing Windows version builds with `npm run desktop:build`.
+The local-only [Lite v0.5.0 Windows release](https://github.com/customerservice-prog/Work-Mode/releases/tag/v0.5.0) has a bundled small offline AI model. It is a different edition, and it has not been verified on every low-spec PC.
 
-For cloud experimentation, `WORKMODE_CLOUD_MODE=1` requires `WORKMODE_CLOUD_ORIGIN` (exact HTTPS origin), `WORKMODE_CLOUD_PASSWORD` (16+ characters), `WORKMODE_SESSION_SECRET` (32+ characters), a private `OPENAI_API_KEY`, and a secure host providing TLS, persistent storage and Chromium sandbox support. Never commit these values to GitHub.
+## Security and verification
 
-Do not enable automatic production deployment just because this code builds: security and real-device integration tests are mandatory.
+See [Operations](docs/OPERATIONS.md), [Acceptance criteria](docs/ACCEPTANCE.md), and [Architecture](docs/CROSS-DEVICE.md).
+The GitHub workflow runs `npm test` and checks the app. **A green CI result does not prove the real Railway site, every external website, or physical iPad/phone works.**
+
+Never put passwords, cookies, API keys, or browser profiles in GitHub, task prompts, or issue comments. Rotate the earlier shared website password inside Work-Mode's Cloud status settings.
