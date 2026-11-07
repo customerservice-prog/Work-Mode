@@ -59,6 +59,18 @@ async function inspectTab(tab,command) {
           controls,snapshot:nonce,limitedFrames:true};
       };
       if(cmd.action==='inspect')return read();
+      if(cmd.action==='verify_post'){
+        const expected=String(cmd.expected||'').trim().slice(0,300);
+        if(expected.length<5)throw Error('A post text excerpt is required');
+        const articles=[...document.querySelectorAll('[role="article"],article')];
+        const matches=articles.filter(el=>visible(el)&&String(el.innerText||'').includes(expected));
+        const links=matches.flatMap(el=>[...el.querySelectorAll('a[href]')]).map(el=>el.href)
+          .filter(h=>/facebook\.com\/(?:groups\/[^/]+\/(?:posts\/|permalink\/)|permalink)/.test(h));
+        const pageText=(document.body?.innerText||'').slice(0,30000);
+        return {ok:true,url:location.href,matchingArticles:matches.length,
+          pendingApproval:/post is pending|pending approval|awaiting admin approval|submitted for approval/i.test(pageText),
+          permalink:links[0]||null};
+      }
       if(cmd.action==='verify'){
         const kind=String(cmd.kind||'text');
         const target=String(cmd.expected||'').trim().slice(0,200);
