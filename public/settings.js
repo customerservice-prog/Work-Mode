@@ -65,7 +65,7 @@ async function openAISettings() {
     dialog.classList.toggle('hosted-settings', hostedSettings);
     settingsEl('settingsHeading').textContent = hostedSettings ? 'Cloud setup status' : 'Choose your AI';
     settingsEl('settingsIntro').textContent = hostedSettings
-      ? 'The AI and browser run on your private Railway server, not this computer. This page cannot save cloud API keys.'
+      ? 'Your browser runs on Railway, not your computer. Simple browser commands work without AI. Advanced AI needs a separately configured model or API.'
       : 'Work-Mode can use AI running on your PC for no per-message model fee, or an OpenAI API key for a more capable paid option.';
     settingsEl('settingsClose').textContent = hostedSettings ? 'Close' : 'Cancel';
     settingsEl('aiProvider').value = config.provider;
@@ -84,7 +84,7 @@ async function openAISettings() {
       try {
         const response = await settingsRequest('/api/cloud/readiness');
         const problems = [];
-        if (!response.aiConfigured) problems.push('AI is not connected. The server needs OPENAI_API_KEY configured privately in Railway.');
+        if (!response.aiConfigured) problems.push('Advanced AI is not connected. Basic browser commands need no AI API; optional advanced AI requires OPENAI_API_KEY or another hosted model, which may cost money.');
         if (response.browserSandboxStatus === 'failed') problems.push('The secure browser cannot start on the current Railway host. This requires a compatible isolated browser host.');
         if (!response.dataDirectoryConfigured || !response.dataDirectoryWritable || !response.volumeAttached) problems.push('Persistent browser storage is not ready.');
         if (!response.browserInstalled) problems.push('The remote browser executable is missing.');
