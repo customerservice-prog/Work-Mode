@@ -1,0 +1,36 @@
+name: Verify protected Work-Mode website link
+on:
+  push:
+    branches: [feature/cross-device-cloud]
+    paths: ['.github/workflows/website-origin-check.yml']
+  workflow_dispatch:
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - name: Confirm external navigation opens login, not Forbidden origin
+        shell: bash
+        run: |
+          set -euo pipefail
+          site="https://work-mode-production.up.railway.app"
+          common=(--silent --show-error --location-trusted --retry 3 --retry-delay 3 --max-time 60)
+          nav=(-H "Sec-Fetch-Site: cross-site" -H "Sec-Fetch-Mode: navigate" -H "Sec-Fetch-Dest: document")
+          code=$(curl "${common[@]}" -D /tmp/index.headers -o /tmp/index.html -w '%{http_code}' "${nav[@]}" "$site/")
+          echo "External top-level navigation: $code"
+          test "$code" = 302
+          grep -qi '^location: /login' /tmp/index.headers
+          code=$(curl "${common[@]}" -o /tmp/login.html -w '%{http_code}' "${nav[@]}" "$site/login")
+          echo "External login page: $code"
+          test "$code" = 200
+          grep -q 'Sign in to Work-Mode' /tmp/login.html
+          code=$(curl "${common[@]}" -o /dev/null -w '%{http_code}' "$site/api/status")
+          echo "Unauthenticated API: $code"
+          test "$code" = 401
+          code=$(curl "${common[@]}" -o /dev/null -w '%{http_code}' -H "Sec-Fetch-Site: cross-site" -H "Sec-Fetch-Mode: cors" "$site/api/status")
+          echo "Cross-site API access: $code"
+          test "$code" = 403
+          code=$(curl "${common[@]}" -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://untrusted.example' -H 'Content-Type: application/json' -d '{"password":"invalid"}' "$site/api/auth/login")
+          echo "Cross-site login submission: $code"
+          test "$code" = 403
+          echo "Live site passes cross-site link navigation and security checks."
