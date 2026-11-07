@@ -31,6 +31,10 @@ async function remoteAction(path, data) {
 async function refreshCloudUsage() {
   if (!document.body.classList.contains('cloud-mode')) return;
   const usageEl=$r('cloudUsage');
+  if (window.workModeCloudAiReady === false) {
+    usageEl.textContent = 'Basic browser commands: no AI API fees or message credits. Railway hosting still uses billable resources.';
+    return;
+  }
   try {
     const res=await fetch('/api/cloud/usage',{credentials:'same-origin',cache:'no-store'});
     if (!res.ok) throw Error('Cannot read usage limits');
@@ -48,9 +52,11 @@ function applyCloudReadiness(state) {
   const storageReady = Boolean(state.dataDirectoryConfigured && state.dataDirectoryWritable && state.volumeAttached);
   const browserReady = storageReady && Boolean(state.browserInstalled) && ['passed','container-isolated'].includes(state.browserSandboxStatus);
   const containerOnly = state.browserSandboxStatus === 'container-isolated';
-  const canRun = aiReady && browserReady;
-  window.workModeCloudBlocked = !canRun;
+  const canRun = browserReady;
+  window.workModeCloudBlocked = !browserReady;
+  window.workModeCloudAiReady = aiReady;
   window.workModeCloudBrowserBlocked = !browserReady;
+  void refreshCloudUsage();
   if (typeof setPhase === 'function') setPhase(window.workModeRunningTask ? 'running' : 'idle');
 
   const issues = [];
@@ -62,22 +68,29 @@ function applyCloudReadiness(state) {
   if (!state.browserInstalled) issues.push('the browser executable is missing');
 
   const banner = $r('cloudSetupBanner');
-  banner.hidden = canRun;
-  if (!canRun) {
+  banner.hidden = aiReady && browserReady && !containerOnly;
+  if (!browserReady) {
     $r('cloudBannerTitle').textContent = 'Work-Mode needs server setup';
-    $r('cloudBannerText').textContent = issues.join('; ') +
-      '. These are server-side settings, not a problem with your computer. Manual browsing may be available even if AI tasks are paused.';
+    $r('cloudBannerText').textContent = issues.join('; ') + '. This is a server-side issue.';
+  } else if (!aiReady) {
+    $r('cloudBannerTitle').textContent = 'Basic browser commands are ready — advanced AI is not connected';
+    $r('cloudBannerText').textContent =
+      'You can now type Hi, Help, Open https://www.google.com and tell me the page title, Scroll down, or Read the page. ' +
+      'This free command mode follows a limited set of instructions; it is not an autonomous AI model. ' +
+      (containerOnly ? 'Security: Chromium sandbox is off; avoid sensitive accounts and untrusted sites.' : '');
+  } else if (containerOnly) {
+    $r('cloudBannerTitle').textContent = 'Browser running with reduced isolation';
+    $r('cloudBannerText').textContent = 'Chromium sandbox is disabled on this Railway host. Avoid sensitive accounts and untrusted websites.';
   }
-  $r('cloudStatus').textContent = containerOnly
-    ? 'Browser works with non-root Railway container isolation; Chromium sandbox is off. AI tasks: ' + (aiReady ? 'configured' : 'not configured') + '.'
-    : canRun
-      ? 'Basic AI, browser and storage checks passed. Verify individual actions before relying on them.'
-      : 'Workspace not ready: ' + issues.join('; ') + '.';
+  $r('cloudStatus').textContent = browserReady
+    ? (aiReady ? 'Advanced AI configured. ' : 'Basic browser commands available without an API. Advanced AI not configured. ') +
+      (containerOnly ? 'Chromium sandbox is off.' : 'Browser isolation checks passed.')
+    : 'Workspace not ready: ' + issues.join('; ') + '.';
 
   const runButton = $r('runTask');
   if (runButton) {
     runButton.disabled = !canRun || Boolean(window.workModeRunningTask);
-    runButton.title = canRun ? '' : 'AI and secure browser setup must be completed on the server';
+    runButton.title = canRun ? (aiReady ? '' : 'Run a supported browser command without AI') : 'Browser setup must be completed on the server';
   }
   const openButton = $r('openBrowser');
   if (openButton) {
@@ -120,7 +133,7 @@ async function initializeRemote() {
     const caption = document.querySelector('.side .kicker');
     if (caption) caption.textContent = 'Your private cloud assistant';
     const description = document.querySelector('.side p.hint');
-    if (description) description.textContent = 'The AI and browser run on your private hosted computer. Your phone, iPad or laptop is a lightweight controller. Actions require your approval.';
+    if (description) description.textContent = 'The browser runs on Railway. Basic commands work without an AI API; advanced AI requires a separate model. Your phone, iPad, or laptop is the controller.';
     const browserPanelTitle = document.querySelector('#browserPanel .paneltitle');
     if (browserPanelTitle) browserPanelTitle.childNodes.forEach(node => {
       if (node.nodeType === Node.TEXT_NODE && node.textContent.includes('Live browser preview')) {
