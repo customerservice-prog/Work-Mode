@@ -66,7 +66,7 @@ textarea:focus{border-color:#9db9e4}
 .historyItem:hover{background:#292d39}.historyItem span{color:#8e9aaf;font-size:11px;display:block}
 @media(max-width:1050px){.recent{display:none}}
 
-dialog.settings{background:#1b1e2a;color:#eef2fb;border:1px solid #4a5165;border-radius:18px;padding:24px;width:min(520px,calc(100vw - 30px));box-shadow:0 24px 100px #000a}
+dialog.settings{background:#1b1e2a;color:#eef2fb;border:1px solid #4a5165;border-radius:18px;padding:24px;width:min(520px,calc(100vw - 30px));max-height:calc(100dvh - 32px);overflow-y:auto;box-shadow:0 24px 100px #000a}
 dialog.settings::backdrop{background:#05070cbd}
 .settings h2{margin:0 0 10px;font-size:22px}
 .settings p,.settings label{font-size:13px;color:#adb8cb;line-height:1.6}
@@ -75,6 +75,17 @@ dialog.settings::backdrop{background:#05070cbd}
 .settings-actions{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
 .settings-help{background:#242b39;border:1px solid #3b4860;padding:12px;border-radius:12px;font-size:12px;color:#b9c5d8;line-height:1.55;margin-top:14px}
 .settings-help a{color:#b9ddff}
+.settings.hosted-settings label[for="aiProvider"],.settings.hosted-settings #aiProvider,
+.settings.hosted-settings #localFields,.settings.hosted-settings #apiFields,
+.settings.hosted-settings #settingsSave{display:none!important}
+.settings.hosted-settings .settings-actions{position:sticky;bottom:-24px;background:#1b1e2a;padding:12px 0 4px}
+.cloud-setup-banner{border:1px solid #6a5660;border-radius:14px;background:#28232a;color:#f4e6e9;padding:14px 18px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.cloud-setup-banner[hidden]{display:none!important}
+.cloud-setup-banner strong{font-size:14px}
+.cloud-setup-banner p{font-size:12px;color:#cec4cc;margin:5px 0 0;line-height:1.5}
+.cloud-setup-banner button{flex-shrink:0;font-size:12px}
+@media(max-width:760px){.cloud-setup-banner{flex-direction:column;align-items:flex-start}.cloud-setup-banner button{width:100%}}
+
 
 .mobile-nav{display:none}
 @media(max-width:1100px){
@@ -163,6 +174,11 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
   <div><h1>Tell it what to do.</h1><p>Give a task, watch the browser, and review the outcome.</p></div>
   <div class="topright"><button type="button" id="installHelp" hidden>Install app</button><button type="button" id="cloudLogout" hidden>Sign out</button><button id="settingsButton" class="ghost">AI Settings</button><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
  </div>
+ 
+ <section id="cloudSetupBanner" class="cloud-setup-banner" hidden aria-live="polite">
+   <div><strong id="cloudBannerTitle">Checking cloud services…</strong><p id="cloudBannerText">Checking AI and secure browser availability.</p></div>
+   <button type="button" id="cloudBannerStatus">View setup status</button>
+ </section>
  <nav id="mobileNav" class="mobile-nav" aria-label="Work-Mode views">
    <button type="button" data-mobile-view="chat" aria-pressed="true">Chat</button>
    <button type="button" data-mobile-view="browser" aria-pressed="false">Browser</button>
@@ -238,8 +254,8 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
 
 <dialog id="settingsDialog" class="settings">
   <form id="settingsForm">
-    <h2>Choose your AI</h2>
-    <p>Work-Mode can use AI running on your PC for no per-message model fee, or an OpenAI API key for a more capable paid option. You can change this later.</p>
+    <h2 id="settingsHeading">Choose your AI</h2>
+    <p id="settingsIntro">Work-Mode can use AI running on your PC for no per-message model fee, or an OpenAI API key for a more capable paid option. You can change this later.</p>
     <label for="aiProvider">AI mode</label>
     <select id="aiProvider">
       <option value="ollama">Free local AI — Ollama (requires installation)</option>
@@ -265,7 +281,7 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
       <div class="settings-help">API costs are billed separately from ChatGPT. Set your spending limits in your API account. Never put the key in task chat.</div>
     </div>
     <p id="settingsMessage" role="status"></p>
-    <div class="settings-actions"><button type="button" id="settingsClose">Cancel</button><button type="submit" class="primary">Save settings</button></div>
+    <div class="settings-actions"><button type="button" id="settingsClose">Cancel</button><button type="submit" id="settingsSave" class="primary">Save settings</button></div>
   </form>
 </dialog>
 <script src="/app.js" defer></script>

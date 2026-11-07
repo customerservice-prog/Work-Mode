@@ -43,6 +43,48 @@ async function refreshCloudUsage() {
     usageEl.textContent='AI usage could not be verified; stop new tasks until the server reports its limits.';
   }
 }
+function applyCloudReadiness(state) {
+  const aiReady = Boolean(state.aiConfigured);
+  const storageReady = Boolean(state.dataDirectoryConfigured && state.dataDirectoryWritable && state.volumeAttached);
+  const browserReady = storageReady && Boolean(state.browserInstalled) && state.browserSandboxStatus === 'passed';
+  const canRun = aiReady && browserReady;
+  window.workModeCloudBlocked = !canRun;
+  window.workModeCloudBrowserBlocked = !browserReady;
+
+  const issues = [];
+  if (!aiReady) issues.push('AI is not connected to Railway');
+  if (state.browserSandboxStatus === 'failed') issues.push('the secure remote browser cannot start on this host');
+  else if (state.browserSandboxStatus !== 'passed') issues.push('secure browser startup has not been confirmed');
+  if (!storageReady) issues.push('browser storage is not fully ready');
+  if (!state.browserInstalled) issues.push('the browser executable is missing');
+
+  const banner = $r('cloudSetupBanner');
+  banner.hidden = canRun;
+  if (!canRun) {
+    $r('cloudBannerTitle').textContent = 'Work-Mode needs server setup';
+    $r('cloudBannerText').textContent = issues.join('; ') +
+      '. These are server-side issues, not a problem with your computer. Tasks are paused until fixed.';
+  }
+  $r('cloudStatus').textContent = canRun
+    ? 'Basic AI, browser and storage checks passed. Verify individual actions before relying on them.'
+    : 'Workspace not ready: ' + issues.join('; ') + '.';
+
+  const runButton = $r('runTask');
+  if (runButton) {
+    runButton.disabled = !canRun || Boolean(window.workModeRunningTask);
+    runButton.title = canRun ? '' : 'AI and secure browser setup must be completed on the server';
+  }
+  const openButton = $r('openBrowser');
+  if (openButton) {
+    openButton.disabled = !browserReady;
+    openButton.title = browserReady ? '' : 'The secure browser cannot start on the current host';
+  }
+  const manualControls = $r('remoteControls');
+  for (const field of manualControls.querySelectorAll('button, input')) {
+    field.disabled = !browserReady;
+  }
+}
+
 async function initializeRemote() {
   try {
     const response = await fetch('/api/mode', { credentials:'same-origin' });
@@ -50,24 +92,22 @@ async function initializeRemote() {
     const mode = await response.json();
     if (!mode.cloud) return;
     document.body.classList.add('cloud-mode');
+    $r('settingsButton').textContent = 'Cloud status';
+    $r('cloudSetupBanner').hidden = false;
+    $r('cloudBannerTitle').textContent = 'Checking server setup…';
+    $r('cloudBannerText').textContent = 'Verifying AI connection, secure browser and saved data.';
+    $r('runTask').disabled = true;
+    $r('openBrowser').disabled = true;
+    window.workModeCloudBlocked = true;
     void refreshCloudUsage();
     try {
-      const response=await fetch('/api/cloud/readiness',{credentials:'same-origin'});
-      if (response.ok) {
-        const state=await response.json();
-        const missing=[];
-        if (!state.aiConfigured) missing.push('AI connection');
-        if (!state.dataDirectoryConfigured || !state.dataDirectoryWritable) missing.push('persistent storage configuration');
-        if (!state.browserInstalled) missing.push('browser installation');
-        if (state.browserSandboxStatus === 'failed') missing.push('secure browser startup on the host');
-        $r('cloudStatus').textContent = missing.length
-          ? 'Workspace setup incomplete: ' + missing.join(', ') + '.'
-          : state.browserSandboxStatus === 'passed'
-            ? 'Secure browser startup passed. Your private workspace is available; AI needs a provider connection if not yet configured.'
-            : 'Browser sandbox test in progress. You may need to refresh this page to see the result.';
-      }
+      const response=await fetch('/api/cloud/readiness',{credentials:'same-origin',cache:'no-store'});
+      if (!response.ok) throw Error('Readiness endpoint unavailable');
+      applyCloudReadiness(await response.json());
     } catch {
-      $r('cloudStatus').textContent='Could not check the private workspace configuration.';
+      $r('cloudBannerTitle').textContent='Cannot verify server setup';
+      $r('cloudBannerText').textContent='Work-Mode is not ready for tasks until AI and secure browser availability can be checked.';
+      $r('cloudStatus').textContent='Could not check the private server configuration.';
     }
     $r('remoteControls').hidden = false;
     $r('cloudLogout').hidden = false;
@@ -132,3 +172,7 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) void refreshCloudUsage();
 });
 setInterval(() => { if (!document.hidden) void refreshCloudUsage(); }, 60000);
+
+$r('cloudBannerStatus').addEventListener('click', () => {
+  if (typeof openAISettings === 'function') void openAISettings();
+});

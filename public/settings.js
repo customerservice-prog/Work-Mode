@@ -1,5 +1,6 @@
 const settingsEl = id => document.getElementById(id);
 let settingsBusy = false;
+let hostedSettings = false;
 
 async function settingsRequest(url, data) {
   const options = data === undefined ? {} : {
@@ -59,6 +60,14 @@ async function saveAISettings() {
 async function openAISettings() {
   try {
     const config = await settingsRequest('/api/settings');
+    hostedSettings = Boolean(config.cloud);
+    const dialog = settingsEl('settingsDialog');
+    dialog.classList.toggle('hosted-settings', hostedSettings);
+    settingsEl('settingsHeading').textContent = hostedSettings ? 'Cloud setup status' : 'Choose your AI';
+    settingsEl('settingsIntro').textContent = hostedSettings
+      ? 'The AI and browser run on your private Railway server, not this computer. This page cannot save cloud API keys.'
+      : 'Work-Mode can use AI running on your PC for no per-message model fee, or an OpenAI API key for a more capable paid option.';
+    settingsEl('settingsClose').textContent = hostedSettings ? 'Close' : 'Cancel';
     settingsEl('aiProvider').value = config.provider;
     const freeOption = settingsEl('aiProvider').querySelector('option[value="ollama"]');
     if (freeOption) freeOption.disabled = Boolean(config.cloud);
@@ -69,11 +78,25 @@ async function openAISettings() {
     settingsEl('keyNote').textContent = config.cloud
       ? (config.hasApiKey ? 'AI access is configured for this private server.' : 'The private server has no AI API key configured yet.')
       : (config.hasApiKey ? 'An API key is saved locally. Leave this blank to keep it.' : 'No API key saved. Paste one from your OpenAI API account.');
-    settingsEl('settingsMessage').textContent = config.cloud
-      ? 'This device connects to your private cloud browser. The AI model runs on the server, not on this device.' : '';
+    settingsEl('settingsMessage').textContent = '';
     updateProviderVisibility();
+    if (hostedSettings) {
+      try {
+        const response = await settingsRequest('/api/cloud/readiness');
+        const problems = [];
+        if (!response.aiConfigured) problems.push('AI is not connected. The server needs OPENAI_API_KEY configured privately in Railway.');
+        if (response.browserSandboxStatus === 'failed') problems.push('The secure browser cannot start on the current Railway host. This requires a compatible isolated browser host.');
+        if (!response.dataDirectoryConfigured || !response.dataDirectoryWritable || !response.volumeAttached) problems.push('Persistent browser storage is not ready.');
+        if (!response.browserInstalled) problems.push('The remote browser executable is missing.');
+        if (response.browserSandboxStatus === 'pending') problems.push('The secure browser startup check has not finished.');
+        settingsEl('settingsMessage').textContent = problems.join(' ') ||
+          'Basic checks pass. Site-specific browser actions still require verification.';
+      } catch {
+        settingsEl('settingsMessage').textContent = 'Could not verify cloud setup. The server may be temporarily unavailable.';
+      }
+    }
     settingsEl('settingsDialog').showModal();
-    if (config.provider === 'ollama') await refreshLocalAI();
+    if (!hostedSettings && config.provider === 'ollama') await refreshLocalAI();
   } catch (err) {
     if (typeof entry === 'function') entry({ message: 'AI settings error: ' + err.message });
   }
@@ -88,6 +111,10 @@ settingsEl('settingsClose').addEventListener('click', () => settingsEl('settings
 settingsEl('settingsForm').addEventListener('submit', async event => {
   event.preventDefault();
   if (settingsBusy) return;
+  if (hostedSettings) {
+    settingsEl('settingsMessage').textContent = 'Cloud settings are managed on the private Railway server, not through this website.';
+    return;
+  }
   settingsBusy = true;
   const message = settingsEl('settingsMessage');
   message.textContent = 'Saving AI settings…';
@@ -147,6 +174,7 @@ aiDownloadEvents.onmessage = event => {
 void (async () => {
   try {
     const config = await settingsRequest('/api/settings');
+    if (config.cloud) return; // The hosted website has no client-side API-key setup flow.
     if (config.provider === 'openai' && !config.hasApiKey) {
       await openAISettings();
     } else if (config.provider === 'ollama') {

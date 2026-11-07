@@ -32,7 +32,8 @@ function entry(data) {
 }
 function setPhase(phase) {
   busy = phase === 'running';
-  $('runTask').disabled = busy;
+  window.workModeRunningTask = busy;
+  $('runTask').disabled = busy || window.workModeCloudBlocked === true;
   $('stopTask').disabled = !busy;
   $('statusDot').className = 'dot ' + (busy ? 'running' : phase === 'done' ? 'done' : phase === 'error' ? 'error' : '');
   $('stateLabel').textContent = ({ running: 'Working', done: 'Last task finished', stopped: 'Stopped', limited: 'Action limit reached', error: 'Needs attention', idle: 'Ready' })[phase] || phase;
@@ -77,7 +78,7 @@ $('stopTask').onclick = async () => {
 };
 async function submit() {
   const task = $('taskInput').value.trim();
-  if (!task || busy) return;
+  if (!task || busy || window.workModeCloudBlocked === true) return;
   $('taskInput').value = '';
   bubble(task, 'user');
   $('runTask').disabled = true;
