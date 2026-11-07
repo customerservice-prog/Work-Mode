@@ -20,7 +20,7 @@ function response(call,step) {
 test('Low-memory hardware selects compact model without requiring Ollama',()=>{
  assert.equal(selectModel(2*GiB),'unsupported');
  assert.equal(selectModel(4*GiB),'lite');
- assert.equal(selectModel(8*GiB),'standard');
+ assert.equal(selectModel(8*GiB),'lite');
  assert.equal(runtimeStatus().requiresOllama,false);
  assert.ok(typeof hardwareInfo().totalMemoryGiB==='number');
  assert.equal(localTools(allTools).some(x=>x.function.name==='inspect_visual'),false);

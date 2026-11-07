@@ -1,62 +1,35 @@
-# Work-Mode for Windows — self-contained offline edition
+# Work-Mode Lite — Free offline Windows browser assistant
 
-**This version is designed for an inexpensive Windows computer.** It is not ChatGPT Work or a feature-for-feature replacement.
+Work-Mode Lite is an experimental, locally running Windows assistant built for low-cost computers. **There is no Railway service, no external AI API, no account or API key, and no per-message/monthly model credit quota.** It is not equivalent to ChatGPT Work and may fail on complicated websites.
 
-## Install and use
+## Use
 
-1. Open [Work-Mode Releases](https://github.com/customerservice-prog/Work-Mode/releases) and download **Work-Mode-Setup-0.4.0-x64.exe** when the new release appears.
-2. Install the Windows app. It creates a Work-Mode desktop shortcut.
-3. Open Work-Mode and type your instruction. **Built-in AI is already included**. You do not need Ollama, a model download, a terminal, GitHub commands, or an AI API key.
-4. Click **Open Browser** to control a separate Microsoft Edge window. Sign into websites yourself when needed.
-5. Review progress and approve consequential actions. Never assume an action succeeded unless verified.
+1. Download Work-Mode Lite v0.5.0 from the repository's Releases page once the Windows test build is marked successful.
+2. Install on 64-bit Windows. The app includes a compact Qwen3 0.6B GGUF model and the llama.cpp CPU engine.
+3. Open Work-Mode. To check the AI or share troubleshooting details, click **System check**, then **Test offline AI** or **Copy diagnostics**.
+4. Start with the command `Open https://www.example.com and tell me the page title`. This basic browser operation works **without loading AI**.
+5. For complex instructions, Work-Mode attempts to use the small offline model. Review every action and its verification.
 
-This Windows prerelease is **unsigned**, so Windows may display a publisher warning. Only run the installer downloaded from this repository's Releases page.
+**No extra Ollama installation, subscription, cloud service, or developer terminal is needed.** The Lite installer is smaller than v0.4.0 because it contains only the 0.6B model rather than both the 0.6B and 1.7B models. It is still a substantial download.
 
-## What makes it suitable for lower-cost PCs
+### Important limitations
 
-- The installer contains a Windows CPU-only llama.cpp engine and **two small offline models**.
-- The application checks installed RAM automatically. Machines with under 7.5 GB use **Lite Qwen3 0.6B** (approximately 397 MB model); machines with at least 7.5 GB use **Standard Qwen3 1.7B** (approximately 1.28 GB model).
-- Below 3.5 GB of total RAM, the included AI will not start to avoid overloading Windows. Machines running out of *available* memory are asked to close other programs.
-- The AI starts only when you ask it to work and shuts down after about six minutes of inactivity to free RAM.
-- The desktop window fits smaller screens instead of requiring a large monitor.
-- A **Test included AI** self-test is available through the local application API to check that the packaged model actually generates a reply.
+- 64-bit Windows and Microsoft Edge are required. Machines with less than about **3.5 GB installed RAM** cannot run the offline AI, but can attempt the basic browser commands.
+- Limited available RAM, older CPUs, Windows antivirus, and crowded browser tabs may prevent local inference from starting.
+- The offline model is **much weaker than ChatGPT Work**. It can struggle with complex reasoning, site layout changes, long tasks, and tool calling. Never assume a website was updated unless the browser actually verifies it.
+- Work-Mode keeps safeguards such as action approvals and finite steps *per task* to prevent runaway loops; these are not billing or monthly usage quotas. You can start more tasks without buying credits.
+- No AI service can promise infinite throughput or capability on finite hardware. Electricity, internet access, and the hardware itself are separate costs.
+- This prerelease is unsigned, so Windows may display a publisher warning. Only download from the GitHub repository.
 
-**The new installer is substantially larger** because it includes both models and the engine. It is a one-install experience, not a zero-download experience.
+## Troubleshooting
 
-### Quality limitations
+If Work-Mode opens but struggles, go to **System check → Copy diagnostics** and paste the output into the chat. It contains memory totals and local engine status, but no API key or website password. **Test offline AI** separately checks whether the included model responds on your specific PC.
 
-A 0.6B or 1.7B offline model is substantially less capable than ChatGPT Work on complex websites. It may be slow on an older CPU, misunderstand site controls, or fail to follow multi-step instructions. It only uses webpage text and controls, not screenshot vision. Work-Mode must disclose when it cannot verify completion. Use it for simpler supervised tasks first.
+The old Railway cloud deployment and its storage were retired. Development is focused on the Windows app only. The GitHub source and unrelated projects, including Auto-Coder, remain separate.
 
-### Optional more capable mode
+## Third-party notices
 
-In **AI Settings**, choose **OpenAI API** and enter a separately billed API key if you want a stronger remote model. This is optional and **not included in the ChatGPT Plus subscription**. Set spending limits with the API provider.
+- llama.cpp, MIT: https://github.com/ggml-org/llama.cpp/releases/tag/b12179
+- Qwen3 0.6B GGUF, Apache 2.0: https://huggingface.co/unsloth/Qwen3-0.6B-GGUF
 
-## Privacy and security
-
-- Your browser and offline model run locally; the app's server binds only to 127.0.0.1.
-- Website credentials should be entered by you into the separate browser, not into AI chat.
-- Secret-looking form values are redacted in text snapshots, and form controls are masked in screenshots passed to a paid visual model.
-- Work-Mode requests approval before identified high-impact actions.
-- Browser sessions and task history stay on your PC.
-- The offline model server uses a randomized access key and loopback-only access.
-- The model is not authorized to perform unverified destructive actions on its own.
-
-## Developer notes
-
-The installer is produced by the Windows GitHub Actions workflow. The workflow downloads pinned, checksum-verified llama.cpp and GGUF model artifacts **during the build**, packages them through electron-builder `extraResources`, and performs a real local AI inference check against the packaged Windows app.
-
-The model weights and binary are not stored in the Git repository. `desktop-runtime/` is ignored and generated only during the Windows packaging job.
-
-### Third-party software
-
-llama.cpp (MIT): https://github.com/ggml-org/llama.cpp/releases/tag/b12179
-
-Qwen3 0.6B (Apache 2.0, Unsloth GGUF): https://huggingface.co/unsloth/Qwen3-0.6B-GGUF
-
-Qwen3 1.7B (Apache 2.0, ggml-org GGUF): https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
-
-The installer includes relevant license notices.
-
-## Project scope
-
-The cross-device experiment remains on its own feature branch and is not part of this Windows release. Auto-Coder remains separate and unchanged. This release is focused only on a lightweight Windows desktop experience.
+The Windows build downloads SHA-256-verified third-party components into the installer and includes license notices. Work-Mode Lite is not affiliated with OpenAI or ChatGPT Work.

@@ -96,7 +96,7 @@ for (const provider of ['openai']) {
     cwd: process.cwd(), windowsHide: true,
     env: {
       ...process.env, NODE_ENV: 'test', BROWSER_HEADLESS: '1',
-      AI_PROVIDER: provider, OLLAMA_MODEL: 'simulated-local', WORKMODE_TEST_PROFILE: testProfile,
+      AI_PROVIDER: provider, WORKMODE_TEST_ALLOW_REMOTE_AI:'1', OLLAMA_MODEL: 'simulated-local', WORKMODE_TEST_PROFILE: testProfile,
       OPENAI_API_KEY: 'integration-test-only',
       WORKMODE_TEST_AI_BASE_URL: 'http://127.0.0.1:' + llmPort + '/v1',
       WORKMODE_TEST_OLLAMA_BASEURL: 'http://127.0.0.1:' + llmPort,

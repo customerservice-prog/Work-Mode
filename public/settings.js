@@ -1,74 +1,98 @@
-const $settings = id => document.getElementById(id);
-function updateAIFields(){
-  const local=$settings('aiProvider').value==='embedded';
-  $settings('localFields').style.display=local?'block':'none';
-  $settings('apiFields').style.display=local?'none':'block';
+const aiEl = id => document.getElementById(id);
+let systemInfo = null;
+let modelCheckRunning = false;
+
+function readableStatus(s) {
+  const hw=s?.hardware||{};
+  const lines=[
+    'Work-Mode Lite v0.5.0 — offline diagnostics',
+    'Platform: '+String(hw.platform||'unknown')+' / '+String(hw.architecture||'unknown'),
+    'Installed RAM: '+String(hw.totalMemoryGiB??'?')+' GB',
+    'Available RAM: '+String(hw.availableMemoryGiB??'?')+' GB',
+    'Built-in model: Qwen3 0.6B Lite',
+    'AI state: '+String(s?.phase||'unknown'),
+    'AI error: '+String(s?.error||'none'),
+    'Ollama required: no',
+    'Cloud account required: no',
+    'Paid API required: no'
+  ];
+  return lines.join('\n');
 }
-async function settingsJson(url,options){
-  const response=await fetch(url,options);
-  const body=await response.json().catch(()=>({}));
-  if(!response.ok)throw Error(body.error||'Settings request failed');
-  return body;
-}
-async function updateHardwareDetails(){
-  const info=$settings('builtInInfo');
-  info.textContent='Checking this computer…';
-  try{
-    const state=await settingsJson('/api/built-in/status');
-    const hardware=state.hardware||{};
-    if(!hardware.enoughMemory){
-      info.textContent='This computer has '+hardware.totalMemoryGiB+' GB RAM. Built-in AI may not run: '+hardware.note+' You can still use the optional API mode.';
-      return;
+
+async function refreshSystemInfo() {
+  const info=aiEl('builtInInfo');
+  try {
+    const response=await fetch('/api/built-in/status',{cache:'no-store'});
+    const state=await response.json();
+    if(!response.ok)throw Error(state.error||'Could not check the local system');
+    systemInfo=state;
+    const hw=state.hardware||{};
+    const memory=String(hw.totalMemoryGiB??'?')+' GB installed, '+String(hw.availableMemoryGiB??'?')+' GB available';
+    if(!hw.enoughMemory){
+      info.textContent='Memory: '+memory+'. The offline AI needs more RAM, but basic website-opening commands can still work without loading the model.';
+    }else{
+      const status=state.error ? ' Last problem: '+state.error
+        : state.ready ? ' AI model is ready.'
+        : ' AI starts only when you request it.';
+      info.textContent='Memory: '+memory+'. Qwen3 Lite is included.'+status;
     }
-    const model=hardware.recommendedModel==='lite'?'Lite AI model':'Standard AI model';
-    const readiness=state.phase==='ready'?' · AI ready':state.phase==='loading'?' · Loading AI…':state.error?' · '+state.error:' · AI starts automatically when needed';
-    info.textContent='Your computer: '+hardware.totalMemoryGiB+' GB RAM ('+hardware.availableMemoryGiB+' GB available). Work-Mode will use the included '+model+readiness+'.';
   }catch(err){
-    info.textContent='Could not read computer information. Built-in AI will be checked when you run a task.';
+    info.textContent='Could not check RAM or model status: '+err.message;
+    systemInfo={phase:'error',error:String(err.message||err)};
   }
+  return systemInfo;
 }
-async function openSettings(){
+
+aiEl('settingsButton').textContent='System check';
+aiEl('settingsButton').addEventListener('click',()=>{
+  aiEl('diagnosticsMessage').textContent='';
+  aiEl('settingsDialog').showModal();
+  void refreshSystemInfo();
+});
+aiEl('settingsClose').addEventListener('click',()=>aiEl('settingsDialog').close());
+
+aiEl('testOfflineAI').addEventListener('click',async()=>{
+  if(modelCheckRunning)return;
+  modelCheckRunning=true;
+  const button=aiEl('testOfflineAI');
+  const msg=aiEl('diagnosticsMessage');
+  button.disabled=true;
+  button.textContent='Testing…';
+  msg.textContent='Starting the included offline model and asking it to respond. This may take a while on an older computer.';
   try{
-    const settings=await settingsJson('/api/settings');
-    $settings('aiProvider').value=settings.provider==='openai'?'openai':'embedded';
-    $settings('apiModel').value=settings.openaiModel||'gpt-4.1-mini';
-    $settings('apiKey').value='';
-    $settings('keyNote').textContent=settings.hasApiKey?
-      'An API key is already saved on this computer. Leave the field blank to keep it.':
-      'No API key saved. This is optional when using built-in AI.';
-    $settings('settingsMessage').textContent='';
-    updateAIFields();
-    $settings('settingsDialog').showModal();
-    await updateHardwareDetails();
+    const response=await fetch('/api/built-in/check',{method:'POST',cache:'no-store'});
+    const result=await response.json().catch(()=>({}));
+    systemInfo=result.status||systemInfo;
+    if(!response.ok||!result.ok)throw Error(result.error||'Offline AI did not pass the test');
+    msg.textContent='Offline AI passed the response test. The model responded: '+String(result.sample||'').slice(0,80)+'. Complex browser tasks still need real verification.';
   }catch(err){
-    if(typeof entry==='function')entry({message:'AI settings error: '+err.message});
+    msg.textContent='Offline AI did not pass: '+err.message+
+      ' You can still use simple website-opening commands without the AI model.';
+  }finally{
+    modelCheckRunning=false;
+    button.disabled=false;
+    button.textContent='Test offline AI';
+    void refreshSystemInfo();
   }
-}
-$settings('settingsButton').addEventListener('click',()=>void openSettings());
-$settings('settingsClose').addEventListener('click',()=>$settings('settingsDialog').close());
-$settings('aiProvider').addEventListener('change',updateAIFields);
-$settings('settingsForm').addEventListener('submit',async event=>{
-  event.preventDefault();
-  const message=$settings('settingsMessage');
-  message.textContent='Saving…';
-  const data={
-    provider:$settings('aiProvider').value,
-    openaiModel:$settings('apiModel').value.trim()
-  };
-  const key=$settings('apiKey').value.trim();
-  if(key)data.apiKey=key;
+});
+
+aiEl('copyDiagnostics').addEventListener('click',async()=>{
+  if(!systemInfo)await refreshSystemInfo();
+  const text=readableStatus(systemInfo);
   try{
-    const saved=await settingsJson('/api/settings',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(data)
-    });
-    if(saved.provider==='openai'&&!saved.hasApiKey){
-      message.textContent='To use paid API mode, enter an API key. Choose Built-in AI for an option that does not require a key.';
-      return;
-    }
-    message.textContent='Saved.';
-    $settings('apiKey').value='';
-    $settings('settingsDialog').close();
-    if(typeof entry==='function')entry({message:'AI mode selected: '+(saved.provider==='embedded'?'Built-in AI':'OpenAI API')});
-  }catch(err){message.textContent=err.message;}
+    await navigator.clipboard.writeText(text);
+    aiEl('diagnosticsMessage').textContent='System information copied. You can paste it into this chat for troubleshooting; it contains no account passwords or API keys.';
+  }catch{
+    const field=document.createElement('textarea');
+    field.value=text;
+    field.style.position='fixed';
+    field.style.opacity='0';
+    document.body.appendChild(field);
+    field.select();
+    const copied=document.execCommand('copy');
+    field.remove();
+    aiEl('diagnosticsMessage').textContent=copied
+      ? 'System information copied. Paste it into the chat for help.'
+      : 'Could not copy automatically. Diagnostics: '+text;
+  }
 });

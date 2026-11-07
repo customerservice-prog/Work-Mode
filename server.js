@@ -9,7 +9,7 @@ import { chromium } from 'playwright';
 import OpenAI from 'openai';
 import { assertPublicNavigation, assertPublicUrl, isHighImpactAction, isSecretField, assertLocalRequest, redactForLog } from './lib/safety.js';
 import { recordTask, listHistory, historyEntry } from './lib/history.js';
-import { readSettings, saveSettings, getPublicSettings } from './lib/settings.js';
+import { readSettings, saveSettings, getPublicSettings, migrateLegacySettings } from './lib/settings.js';
 import { detectOllama, pullOllama } from './lib/local-ai.js';
 import { startEmbeddedAI, stopEmbeddedAI, runtimeStatus, scheduleIdleRelease } from './lib/embedded-runtime.js';
 import { runEmbeddedAgent } from './lib/embedded-agent.js';
@@ -386,10 +386,24 @@ async function runTask(task) {
   stopped = false;
   notify('status', { phase: SESSION.phase, task });
   try {
+    // Simple navigation works without starting any AI model. This keeps
+    // first-run tests usable even on very small Windows PCs.
+    const quickOpen = /^(?:open|visit|go to|navigate to)s+(https?://[^s]+?)(?:s+(?:ands+)?(?:tell me (?:its|the) (?:page )?title|show the page))?.?$/i.exec(task);
+    if (quickOpen) {
+      const url = await validateBrowserUrl(quickOpen[1]);
+      await executeTool('navigate',{url});
+      const page = await ensureBrowser();
+      const title = (await page.title().catch(()=>'')) || '(untitled page)';
+      SESSION.answer='Opened '+page.url()+'\nPage title: '+title+
+        '\nThis basic command ran locally without loading the AI model or using any credits.';
+      SESSION.phase='done';
+      log('Verified navigation and page title without model inference.');
+      return;
+    }
     const settings = await readSettings();
     if (settings.provider === 'embedded') {
-      // The bundled model runs on demand, only when a task is submitted.
-      // It automatically selects Lite or Standard based on installed RAM.
+      // Only the compact, offline model is bundled.
+      // No AI provider or per-message subscription is needed.
       const resourceRoot = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_RESOURCE_ROOT
         ? path.resolve(process.env.WORKMODE_TEST_RESOURCE_ROOT)
         : process.resourcesPath;
@@ -401,7 +415,7 @@ async function runTask(task) {
       const result = await runEmbeddedAgent({
         client, model: modelId, task, tools: browserTools, policy: POLICY,
         execute: executeTool, log, isStopped: () => stopped,
-        maxSteps: hardware.recommendedModel === 'lite' ? 12 : 18,
+        maxSteps: 14,
         onStep: step => { SESSION.steps = step; }
       });
       SESSION.answer = result.answer;
@@ -663,7 +677,8 @@ app.post('/api/stop', (_req, res) => {
   log('Stop requested by user');
   res.json({ ok: true });
 });
-export function startLocalServer(port = PORT) {
+export async function startLocalServer(port = PORT) {
+  await migrateLegacySettings();
   return new Promise((resolve, reject) => {
     const localServer = app.listen(port, '127.0.0.1');
     localServer.once('error', reject);

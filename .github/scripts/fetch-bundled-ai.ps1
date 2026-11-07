@@ -30,7 +30,6 @@ if ($null -eq $llamaServer) { throw 'Pinned llama.cpp release did not contain ll
 Copy-Item -Path (Join-Path $llamaServer.DirectoryName '*') -Destination $engine -Recurse -Force
 if (!(Test-Path (Join-Path $engine 'llama-server.exe'))) { throw 'The packaged llama.cpp engine is missing' }
 DownloadVerified 'https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf' (Join-Path $models 'Qwen3-0.6B-Q4_K_M.gguf') 'ac2d97712095a558e31573f62f466a3f9d93990898b0ec79d7c974c1780d524a' 350000000
-DownloadVerified 'https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf' (Join-Path $models 'Qwen3-1.7B-Q4_K_M.gguf') 'd2387ca2dbfee2ffabce7120d3770dadca0b293052bc2f0e138fdc940d9bc7b5' 1200000000
 
 @'
 Work-Mode includes separately licensed third-party components.
@@ -39,11 +38,9 @@ llama.cpp, MIT License, release b12179:
 https://github.com/ggml-org/llama.cpp
 Qwen3-0.6B (Unsloth GGUF), Apache License 2.0:
 https://huggingface.co/unsloth/Qwen3-0.6B-GGUF
-Qwen3-1.7B (ggml-org GGUF), Apache License 2.0:
-https://huggingface.co/ggml-org/Qwen3-1.7B-GGUF
 '@ | Set-Content -LiteralPath (Join-Path $licenses 'THIRD-PARTY-NOTICES.txt') -Encoding utf8
 & curl.exe --location --fail --retry 2 --output (Join-Path $licenses 'llama-MIT-LICENSE.txt') 'https://raw.githubusercontent.com/ggml-org/llama.cpp/b12179/LICENSE'
 if ($LASTEXITCODE -ne 0) { throw 'Could not package llama.cpp MIT license' }
 & curl.exe --location --fail --retry 2 --output (Join-Path $licenses 'Apache-2.0-LICENSE.txt') 'https://www.apache.org/licenses/LICENSE-2.0.txt'
 if ($LASTEXITCODE -ne 0) { throw 'Could not package model Apache 2.0 license' }
-Write-Host 'All bundled AI assets downloaded, verified and ready for Windows packaging.'
+Write-Host 'Lite-only offline model and engine verified for Windows packaging.'

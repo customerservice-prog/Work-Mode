@@ -1,8 +1,8 @@
 {
   "name": "work-mode",
   "productName": "Work-Mode",
-  "version": "0.4.0",
-  "description": "Windows browser assistant with included offline AI and low-RAM mode",
+  "version": "0.5.0",
+  "description": "Lite offline Windows browser assistant; no cloud subscription or AI usage credits",
   "private": true,
   "type": "module",
   "main": "desktop/main.mjs",

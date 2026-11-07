@@ -1,7 +1,7 @@
 name: Build Work-Mode Windows installer
 on:
   push:
-    branches: [feature/low-spec-windows-all-in-one]
+    branches: [feature/windows-lite-no-subscription]
     paths:
       - 'desktop/**'
       - 'server.js'
@@ -26,6 +26,10 @@ jobs:
           node-version: '22'
       - name: Install project dependencies
         run: npm install --no-audit --no-fund
+      - name: Install Playwright browser for automated tests
+        run: npx playwright install chromium
+      - name: Run app tests without paid API calls
+        run: npm test
       - name: Download and verify included local AI engine and models
         shell: pwsh
         run: ./.github/scripts/fetch-bundled-ai.ps1
@@ -66,7 +70,7 @@ jobs:
             $started.Refresh()
             if ($started.HasExited) { throw "Packaged desktop app quit unexpectedly after startup" }
             $html = (Invoke-WebRequest -Uri "http://127.0.0.1:3168" -UseBasicParsing -TimeoutSec 5).Content
-            if ($html -notmatch 'value="embedded"') { throw "Included AI is not the default option" }
+            if ($html -notmatch 'Offline AI system check') { throw "Offline-only diagnostic UI is missing" }
             $localStatus = Invoke-RestMethod -Uri "http://127.0.0.1:3168/api/built-in/status" -TimeoutSec 5
             if ($localStatus.requiresOllama -ne $false) { throw "This installer still requires Ollama" }
             if ($localStatus.hardware.enoughMemory -ne $true) { throw "Windows runner unexpectedly lacks enough RAM" }
@@ -90,19 +94,19 @@ jobs:
           if (!(Test-Path "dist/win-unpacked/resources/app.asar")) { throw "Application package was not generated" }
           if (!(Test-Path "dist/win-unpacked/resources/engine/llama-server.exe")) { throw "Bundled local AI engine is missing" }
           if ((Get-Item "dist/win-unpacked/resources/models/Qwen3-0.6B-Q4_K_M.gguf").Length -lt 350000000) { throw "Lite AI model is missing" }
-          if ((Get-Item "dist/win-unpacked/resources/models/Qwen3-1.7B-Q4_K_M.gguf").Length -lt 1200000000) { throw "Standard AI model is missing" }
+          if (Test-Path "dist/win-unpacked/resources/models/Qwen3-1.7B-Q4_K_M.gguf") { throw "Large AI model was incorrectly bundled in Lite-only release" }
           Write-Host "Verified $($installer[0].Name) ($([math]::Round($installer[0].Length/1MB, 1)) MB)"
       - name: Publish installer to GitHub Releases
-        if: false
+        if: github.ref == 'refs/heads/feature/windows-lite-no-subscription'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $exe = (Get-ChildItem "dist" -Filter "Work-Mode-Setup-*.exe" -File | Select-Object -First 1).FullName
-          $tag = "v0.4.0"
+          $tag = "v0.5.0"
           gh release view $tag --repo "${{ github.repository }}" 2>$null
           if ($LASTEXITCODE -eq 0) {
             gh release upload $tag $exe --clobber --repo "${{ github.repository }}"
           } else {
-            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.4.0 for Windows" --prerelease --notes "Self-contained Windows desktop installer with CPU-only offline AI model and engine (Lite and Standard, automatically selected by installed RAM). No Ollama or separate API key required for offline use. The models are small and not equivalent to ChatGPT Work; complex website tasks can be inaccurate. Unsigned prerelease; real signed-in website tasks still need verification. Microsoft Edge required for the visible browser."
+            gh release create $tag $exe --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "Work-Mode Desktop v0.5.0 Lite — Free Offline AI for Windows" --prerelease --notes "Work-Mode Lite v0.5.0: One compact Qwen3 0.6B offline model and llama.cpp engine bundled. No Railway, no OpenAI API key, no Ollama, no monthly AI credits or subscription. Basic Open https:// commands work without loading AI. System check and copyable diagnostics included. On a cheap Windows laptop, complex AI-controlled websites may still fail due to model limitations or available RAM. Requires 64-bit Windows and Microsoft Edge. This is unsigned experimental software; supervise and verify tasks. No ChatGPT Work parity."
           }

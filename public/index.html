@@ -97,7 +97,7 @@ dialog.settings::backdrop{background:#05070cbd}
 <main class="main">
  <div class="top">
   <div><h1>Tell it what to do.</h1><p>Give a task, watch the browser, and review the outcome.</p></div>
-  <div class="topright"><button id="settingsButton" class="ghost">AI Settings</button><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
+  <div class="topright"><button id="settingsButton" class="ghost">System check</button><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
  </div>
  <div class="columns">
   <section class="panel">
@@ -122,33 +122,20 @@ dialog.settings::backdrop{background:#05070cbd}
    <div class="approval" id="approval"><h3>Approval required</h3><p id="approvalText"></p><div class="buttons"><button class="primary" id="approve">Approve this action</button><button id="deny">Deny</button></div></div>
   </section>
  </div>
- <p class="notice">Early local MVP. Supervise browser actions. Do not paste API keys or passwords into chat. OpenAI API usage has separate costs.</p>
+ <p class="notice">Early local MVP. Supervise browser actions. Do not paste API keys or passwords into chat. Offline AI runs on this PC without usage charges.</p>
 </main>
 </div>
-<dialog id="settingsDialog" class="settings">
-  <form id="settingsForm">
-    <h2>AI Settings</h2>
-    <p>Work-Mode includes offline AI. No additional program, model download, or API account is needed for the built-in option.</p>
-    <label for="aiProvider">AI mode</label>
-    <select id="aiProvider">
-      <option value="embedded">Built-in AI — included, no separate API charges</option>
-      <option value="openai">OpenAI API — optional, metered usage</option>
-    </select>
-    <div id="localFields">
-      <div class="settings-help" id="builtInInfo" role="status" aria-live="polite">Checking this computer's RAM and available AI models…</div>
-      <div class="settings-help">The smaller built-in model runs on computers with limited memory. It is less capable than ChatGPT Work and may be unable to finish complex tasks. If a task cannot be verified, Work-Mode must say so.</div>
-    </div>
-    <div id="apiFields">
-      <label for="apiModel">API model</label>
-      <input id="apiModel" spellcheck="false" value="gpt-4.1-mini">
-      <label for="apiKey">API key</label>
-      <input id="apiKey" type="password" autocomplete="new-password" spellcheck="false" placeholder="Optional API key">
-      <p id="keyNote">An API key is not needed for built-in AI.</p>
-      <div class="settings-help">OpenAI API usage has a separate cost. Your ChatGPT plan does not cover these charges. Set spending limits in your API account.</div>
-    </div>
-    <p id="settingsMessage" role="status"></p>
-    <div class="settings-actions"><button type="button" id="settingsClose">Cancel</button><button type="submit" class="primary">Save settings</button></div>
-  </form>
+<dialog id="settingsDialog" class="settings" aria-labelledby="diagnosticsHeading">
+  <h2 id="diagnosticsHeading">Offline AI system check</h2>
+  <p>Work-Mode Lite runs on this computer. No Railway, no Ollama, no API key, and no per-message charges.</p>
+  <div id="builtInInfo" class="settings-help" role="status" aria-live="polite">Checking computer memory…</div>
+  <div class="settings-help">This is a compact offline model. It can struggle with complicated websites and cannot match ChatGPT Work. Your tasks are not subject to a monthly AI credit quota, but the computer still needs enough RAM and time.</div>
+  <p id="diagnosticsMessage" role="status" aria-live="polite"></p>
+  <div class="settings-actions" style="justify-content:flex-start;flex-wrap:wrap">
+    <button type="button" id="testOfflineAI" class="primary">Test offline AI</button>
+    <button type="button" id="copyDiagnostics">Copy diagnostics</button>
+    <button type="button" id="settingsClose">Close</button>
+  </div>
 </dialog>
 <script src="/app.js" defer></script>
 <script src="/extra.js" defer></script>
