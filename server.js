@@ -165,7 +165,8 @@ async function launchBrowser() {
     headless: CLOUD_MODE || (process.env.NODE_ENV === 'test' && process.env.BROWSER_HEADLESS === '1'),
     chromiumSandbox: CLOUD_MODE && !CLOUD_CONTAINER_BROWSER && process.env.NODE_ENV !== 'test',
     viewport: { width: 1200, height: 820 },
-    acceptDownloads: false
+    acceptDownloads: false,
+    ...(CLOUD_MODE ? { serviceWorkers:'block', permissions:[] } : {})
   });
   try {
     // Install network restrictions BEFORE making the browser available to
@@ -194,6 +195,21 @@ async function launchBrowser() {
         await route.abort('blockedbyclient').catch(() => {});
       }
     });
+    // Browser service workers can bypass HTTP request routing. Block them in
+    // hosted mode and also validate WebSocket targets against private networks.
+    if (CLOUD_MODE) {
+      await fresh.routeWebSocket('**/*', async ws => {
+        try {
+          const source=new URL(ws.url());
+          if (!['wss:','ws:'].includes(source.protocol)) throw Error('Invalid WebSocket protocol');
+          source.protocol=source.protocol === 'wss:' ? 'https:' : 'http:';
+          if (!allowedIntegrationTestUrl(source.href)) await assertPublicNavigation(source.href);
+          ws.connectToServer();
+        } catch {
+          await ws.close({code:1008,reason:'Destination blocked'}).catch(()=>{});
+        }
+      });
+    }
     fresh.on('page', attachPage);
     const initialPage = fresh.pages().at(-1) || await fresh.newPage();
     attachPage(initialPage);
