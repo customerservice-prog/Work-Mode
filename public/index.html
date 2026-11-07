@@ -159,6 +159,18 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
   body.cloud-mode #chatPanel,body.cloud-mode #browserPanel{height:calc(100dvh - 146px)}
 }
 .settings #cloudPasswordForm[hidden]{display:none!important}
+
+.edge-panel{border:1px solid #43536b;background:#192536;border-radius:12px;padding:12px;margin:10px 8px;display:grid;gap:9px;max-height:46dvh;overflow-y:auto}
+.edge-panel[hidden]{display:none!important}
+.edge-panel .edge-line{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.edge-panel input,.edge-panel textarea,.edge-panel select{background:#101925;border:1px solid #57667d;border-radius:8px;padding:9px;color:#e8eef9;min-width:0;flex:1}
+.edge-panel button{border-radius:8px;padding:8px 11px}
+.edge-panel .edge-label{font-size:12px;color:#b8c8da;line-height:1.4}
+.edge-panel .edge-status{font-size:12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.edge-panel .edge-feedback{background:#111c29;border-radius:8px;padding:9px;font-size:12px;max-height:100px;overflow:auto;white-space:pre-wrap}
+.edge-panel textarea{min-height:62px}
+.edge-panel h3{margin:0;font-size:15px}
+
 </style>
 </head>
 <body>
@@ -173,7 +185,7 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
 <main class="main">
  <div class="top">
   <div><h1>Tell it what to do.</h1><p>Give a task, watch the browser, and review the outcome.</p></div>
-  <div class="topright"><button type="button" id="installHelp" hidden>Install app</button><button type="button" id="cloudLogout" hidden>Sign out</button><button id="settingsButton" class="ghost">AI Settings</button><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
+  <div class="topright"><button type="button" id="edgeToggle" hidden>My Edge tabs</button><button type="button" id="installHelp" hidden>Install app</button><button type="button" id="cloudLogout" hidden>Sign out</button><button id="settingsButton" class="ghost">AI Settings</button><button id="openBrowser">Open Browser</button><button class="danger" id="stopTask" disabled>Stop</button></div>
  </div>
  
  <section id="cloudSetupBanner" class="cloud-setup-banner" hidden aria-live="polite">
@@ -200,6 +212,21 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
   <section class="panel" id="browserPanel">
    <div class="paneltitle">Live browser preview <span style="font-weight:400;color:#8895ab">· visible local window</span> <button id="refreshPreview" class="ghost" style="float:right;padding:4px 9px">Refresh</button></div>
    <div id="tabbar" class="tabbar"><span class="hint">Browser tabs appear here.</span></div>
+    <section id="edgeConnector" class="edge-panel" hidden aria-label="Connected Edge tab controller">
+      <h3>Use your existing Edge tabs · No browser API subscription</h3>
+      <div class="edge-label">Open Facebook or another website in Edge. Click the Work-Mode extension icon in that website tab to grant one-site access. Then return here.</div>
+      <div class="edge-line"><button id="edgeCheck" type="button">Check extension</button><button id="edgeRead" type="button">Read selected tab</button></div>
+      <div id="edgeStatus" class="edge-status" role="status">Extension not checked yet.</div>
+      <div class="edge-line"><select id="edgeControl" aria-label="Visible control to interact with"><option value="">Read the page to see controls</option></select></div>
+      <div class="edge-line"><button type="button" id="edgeClick">Click selected</button><input id="edgeText" type="text" placeholder="Text for the selected field"><button type="button" id="edgeFill">Type</button></div>
+      <div class="edge-line"><button type="button" id="edgeScrollUp">Scroll up</button><button type="button" id="edgeScrollDown">Scroll down</button></div>
+      <div class="edge-label">Facebook group post test: choose a group URL and write the exact post. Work-Mode prepares a draft. Publishing always needs your separate confirmation.</div>
+      <input id="edgeGroupUrl" type="url" placeholder="https://www.facebook.com/groups/123456789/">
+      <textarea id="edgeGroupPost" placeholder="Exact text to post in this Facebook group" maxlength="3000"></textarea>
+      <div class="edge-line"><button id="edgePrepare" type="button">Prepare group post</button><button id="edgePublish" type="button" disabled>Review &amp; publish</button></div>
+      <div id="edgeFeedback" class="edge-feedback">No Facebook post attempted.</div>
+    </section>
+
    <div id="remoteControls" class="remote-controls" hidden>
   <div class="remote-title"><strong>Remote browser</strong><span>Tap the preview to control it</span></div>
   <div id="cloudStatus" class="remote-help" role="status" aria-live="polite">Checking private workspace readiness…</div>
@@ -300,5 +327,6 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
 <script src="/settings.js" defer></script>
 <script src="/mobile.js" defer></script>
 <script src="/remote.js" defer></script>
+<script src="/edge-tabs.js" defer></script>
 </body>
 </html>
