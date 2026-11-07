@@ -33,6 +33,9 @@ jobs:
           node --check lib/hosted-auth.js
           node --check lib/cloud-config.js
           node --check lib/cloud-budget.js
+          node --check lib/hosted-ai.js
+          node --check lib/task-journal.js
+          node --check lib/basic-commands.js
           node --check public/remote.js
           node --check public/mobile.js
           node --check lib/local-ai.js
