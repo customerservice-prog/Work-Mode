@@ -1,4 +1,4 @@
-name: Verify protected Work-Mode website link
+name: Verify restored protected Work-Mode website link
 on:
   push:
     branches: [feature/cross-device-cloud]
@@ -33,4 +33,4 @@ jobs:
           code=$(curl "${common[@]}" -o /dev/null -w '%{http_code}' -X POST -H 'Origin: https://untrusted.example' -H 'Content-Type: application/json' -d '{"password":"invalid"}' "$site/api/auth/login")
           echo "Cross-site login submission: $code"
           test "$code" = 403
-          echo "Live site passes cross-site link navigation and security checks."
+          echo "Restored Railway site serves login and still protects API routes."
