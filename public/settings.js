@@ -87,7 +87,7 @@ async function openAISettings() {
       try {
         const response = await settingsRequest('/api/cloud/readiness');
         const problems = [];
-        if (!response.aiConfigured) problems.push('Advanced AI is not configured. Basic commands need no AI API; connect a paid API or an independently hosted compatible model to enable advanced tasks.');
+        if (!response.aiConfigured) problems.push('Advanced AI is not configured. Basic browser commands need no AI API. Optional advanced AI requires a privately configured OPENAI_API_KEY (paid), or WORKMODE_AI_BASE_URL and WORKMODE_AI_MODEL (self-hosted computing costs).');
         if (response.aiBackend === 'compatible') problems.push('Self-hosted AI settings are present, but connectivity has not yet been proven.');
         if (response.browserSandboxStatus === 'failed') problems.push('The secure browser cannot start on the current Railway host. This requires a compatible isolated browser host.');
         if (!response.dataDirectoryConfigured || !response.dataDirectoryWritable || !response.volumeAttached) problems.push('Persistent browser storage is not ready.');
