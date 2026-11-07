@@ -36,15 +36,17 @@ function setPhase(phase) {
   $('runTask').disabled = busy || window.workModeCloudBlocked === true;
   $('stopTask').disabled = !busy;
   const setupBlocked = window.workModeCloudBlocked === true;
-  const manualBrowserReady = setupBlocked && window.workModeCloudBrowserBlocked === false;
+  const basicMode = window.workModeCloudAiReady === false && window.workModeCloudBrowserBlocked === false;
   $('statusDot').className = 'dot ' + (setupBlocked ? 'error' : busy ? 'running' : phase === 'done' ? 'done' : phase === 'error' ? 'error' : '');
-  $('stateLabel').textContent = manualBrowserReady ? 'Browser ready · AI not connected' : setupBlocked ? 'Setup required'
+  $('stateLabel').textContent = setupBlocked ? 'Setup required'
+    : busy ? 'Working'
+    : basicMode ? 'Basic browser commands ready'
     : (({ running: 'Working', done: 'Last task finished', stopped: 'Stopped', limited: 'Action limit reached', error: 'Needs attention', idle: 'Ready' })[phase] || phase);
-  $('stateDetails').textContent = manualBrowserReady
-    ? 'Open Browser works on Railway; AI commands are unavailable without a configured provider.'
-    : setupBlocked
-    ? 'AI and remote browser setup must be completed on Railway. This is not a problem with your computer.'
-    : busy ? 'Follow actions on the right. Review any approval prompt.' : 'Open the browser or give another task.';
+  $('stateDetails').textContent = setupBlocked
+    ? 'Remote browser setup is incomplete on Railway. This is not a problem with your computer.'
+    : busy ? 'Follow actions on the right. Review any approval prompt.'
+    : basicMode ? 'Try: Hi, Help, Open google.com, Read the page. Advanced AI is not connected.'
+    : 'Open the browser or give another task.';
 }
 function preview(version, url) {
   if (version <= lastVersion) return;
