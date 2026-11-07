@@ -472,7 +472,9 @@ async function runTask(task) {
     const settings = await effectiveSettings();
     const useLocalAI = !CLOUD_MODE && settings.provider === 'ollama';
     if (!useLocalAI && !settings.apiKey?.trim()) {
-      throw new Error('Choose AI_PROVIDER=ollama for free local AI, or enter OPENAI_API_KEY in your local .env.');
+      throw new Error(CLOUD_MODE
+        ? 'The website is online, but AI is not connected yet. Add a separately billed OPENAI_API_KEY in Railway Variables to enable AI tasks. You can still use manual browser controls.'
+        : 'Select a configured AI provider in AI Settings.');
     }
     if (useLocalAI) {
       const status = await detectOllama(settings.ollamaModel, localAIBase);
