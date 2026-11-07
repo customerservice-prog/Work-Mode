@@ -158,6 +158,7 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
   .topright button{font-size:11px;padding:8px}
   body.cloud-mode #chatPanel,body.cloud-mode #browserPanel{height:calc(100dvh - 146px)}
 }
+.settings #cloudPasswordForm[hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -282,6 +283,16 @@ body.cloud-mode .preview img{max-height:none;width:100%;height:auto;object-fit:i
     </div>
     <p id="settingsMessage" role="status"></p>
     <div class="settings-actions"><button type="button" id="settingsClose">Cancel</button><button type="submit" id="settingsSave" class="primary">Save settings</button></div>
+  </form>
+  <form id="cloudPasswordForm" autocomplete="off" hidden>
+    <h3>Secure your Work-Mode access</h3>
+    <p>Change the website password privately. The current password is required, and all existing sessions will be signed out.</p>
+    <label for="cloudCurrentPassword">Current website password</label>
+    <input id="cloudCurrentPassword" type="password" autocomplete="current-password" required>
+    <label for="cloudNewPassword">New website password (20 characters minimum)</label>
+    <input id="cloudNewPassword" type="password" autocomplete="new-password" minlength="20" maxlength="200" required>
+    <p id="cloudPasswordMessage" role="status"></p>
+    <div class="settings-actions"><button id="cloudChangePassword" type="submit">Change password and sign out</button></div>
   </form>
 </dialog>
 <script src="/app.js" defer></script>
