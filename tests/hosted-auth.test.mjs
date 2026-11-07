@@ -20,8 +20,8 @@ test('private hosted mode gates remote pages and APIs and prevents cross-site wr
   const server=app.listen(0,'127.0.0.1');
   await new Promise(resolve=>server.once('listening',resolve));
   const root='http://127.0.0.1:'+server.address().port;
-  async function request(path,{method='GET',cookie='',body,origin}={}) {
-    return requestWithHost(root,path,{method,host:'workmode.example.com',origin,cookie,body});
+  async function request(path,{method='GET',cookie='',body,origin,headers}={}) {
+    return requestWithHost(root,path,{method,host:'workmode.example.com',origin,cookie,body,headers});
   }
   try {
     const unauth=await request('/api/secret');
@@ -31,6 +31,23 @@ test('private hosted mode gates remote pages and APIs and prevents cross-site wr
     assert.equal(page.headers.get('location'),'/login');
     const loginPage=await request('/login');
     assert.equal(loginPage.status,200);
+    // Opening a Work-Mode link from another site must show the sign-in
+    // page rather than 403, but it must never expose authenticated APIs.
+    const externalNavHeaders = {
+      'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'navigate',
+      'Sec-Fetch-Dest':'document'
+    };
+    const fromChatGPT=await request('/',{headers:externalNavHeaders});
+    assert.equal(fromChatGPT.status,302);
+    assert.equal(fromChatGPT.headers.get('location'),'/login');
+    assert.equal((await request('/login',{headers:externalNavHeaders})).status,200);
+    assert.equal((await request('/api/secret',{headers:externalNavHeaders})).status,403);
+    assert.equal((await request('/',{headers:{'Sec-Fetch-Site':'cross-site','Sec-Fetch-Mode':'no-cors','Sec-Fetch-Dest':'image'}})).status,403);
+    assert.equal((await request('/',{origin:'https://another-site.example',headers:externalNavHeaders})).status,403);
+    assert.equal((await request('/api/auth/login',{
+      method:'POST',origin:'https://workmode.example.com',
+      headers:externalNavHeaders,body:{password:'strong-passphrase-for-integration'}
+    })).status,403);
     const cross=await request('/api/auth/login',{method:'POST',origin:'https://attacker.example',body:{password:'strong-passphrase-for-integration'}});
     assert.equal(cross.status,403);
     const bad=await request('/api/auth/login',{method:'POST',origin:'https://workmode.example.com',body:{password:'incorrect'}});

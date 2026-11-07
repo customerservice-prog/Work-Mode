@@ -8,6 +8,7 @@ export function requestWithHost(base, endpoint, options = {}) {
     Host: options.host || url.host,
     ...(options.origin ? { Origin: options.origin } : {}),
     ...(options.cookie ? { Cookie: options.cookie } : {}),
+    ...(options.headers || {}),
     ...(body === null ? {} : { 'Content-Type':'application/json','Content-Length':Buffer.byteLength(body) })
   };
   return new Promise((resolve,reject) => {
