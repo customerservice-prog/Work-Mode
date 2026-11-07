@@ -30,7 +30,10 @@ const hostedSecurity = createHostedAuth({
   origin: process.env.WORKMODE_CLOUD_ORIGIN,
   password: process.env.WORKMODE_CLOUD_PASSWORD,
   secret: process.env.WORKMODE_SESSION_SECRET,
-  ...(CLOUD_MODE ? { sessionFile: path.join(process.env.WORKMODE_DATA_DIR || '/data', 'auth-sessions.json') } : {})
+  ...(CLOUD_MODE ? {
+    sessionFile:path.join(process.env.WORKMODE_DATA_DIR || '/data','auth-sessions.json'),
+    passwordFile:path.join(process.env.WORKMODE_DATA_DIR || '/data','auth-password.json')
+  } : {})
 });
 
 const PORT = Math.min(65535, Math.max(1024, Number(process.env.PORT) || 3168));
