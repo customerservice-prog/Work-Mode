@@ -56,6 +56,12 @@ function applyCloudReadiness(state) {
   window.workModeCloudBlocked = !browserReady;
   window.workModeCloudAiReady = aiReady;
   window.workModeCloudBrowserBlocked = !browserReady;
+  if (!aiReady && browserReady) {
+    const ideas = $r('ideas');
+    if (ideas) ideas.textContent = 'Examples: Open https://www.google.com and tell me the page title; Read the page; Scroll down; Click Search; Help. Complex AI work is unavailable without a model.';
+    const task = $r('taskInput');
+    if (task) task.placeholder = 'Try: Open google.com and tell me the page title';
+  }
   void refreshCloudUsage();
   if (typeof setPhase === 'function') setPhase(window.workModeRunningTask ? 'running' : 'idle');
 
