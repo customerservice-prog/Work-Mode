@@ -76,7 +76,10 @@ async function openAISettings() {
     settingsEl('ollamaModel').value = config.ollamaModel;
     settingsEl('apiKey').value = '';
     settingsEl('keyNote').textContent = config.cloud
-      ? (config.hasApiKey ? 'AI access is configured for this private server.' : 'The private server has no AI API key configured yet.')
+      ? (config.aiBackend === 'compatible'
+        ? 'An OpenAI-compatible model endpoint is configured. Its hosting may still incur computing costs.'
+        : config.hasApiKey ? 'AI API access is configured for this private server.'
+        : 'No hosted AI model is configured; basic browser commands remain available.')
       : (config.hasApiKey ? 'An API key is saved locally. Leave this blank to keep it.' : 'No API key saved. Paste one from your OpenAI API account.');
     settingsEl('settingsMessage').textContent = '';
     updateProviderVisibility();
@@ -84,7 +87,8 @@ async function openAISettings() {
       try {
         const response = await settingsRequest('/api/cloud/readiness');
         const problems = [];
-        if (!response.aiConfigured) problems.push('Advanced AI is not connected. Basic browser commands need no AI API; optional advanced AI requires OPENAI_API_KEY or another hosted model, which may cost money.');
+        if (!response.aiConfigured) problems.push('Advanced AI is not configured. Basic commands need no AI API; connect a paid API or an independently hosted compatible model to enable advanced tasks.');
+        if (response.aiBackend === 'compatible') problems.push('Self-hosted AI settings are present, but connectivity has not yet been proven.');
         if (response.browserSandboxStatus === 'failed') problems.push('The secure browser cannot start on the current Railway host. This requires a compatible isolated browser host.');
         if (!response.dataDirectoryConfigured || !response.dataDirectoryWritable || !response.volumeAttached) problems.push('Persistent browser storage is not ready.');
         if (!response.browserInstalled) problems.push('The remote browser executable is missing.');
