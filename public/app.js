@@ -35,9 +35,13 @@ function setPhase(phase) {
   window.workModeRunningTask = busy;
   $('runTask').disabled = busy || window.workModeCloudBlocked === true;
   $('stopTask').disabled = !busy;
-  $('statusDot').className = 'dot ' + (busy ? 'running' : phase === 'done' ? 'done' : phase === 'error' ? 'error' : '');
-  $('stateLabel').textContent = ({ running: 'Working', done: 'Last task finished', stopped: 'Stopped', limited: 'Action limit reached', error: 'Needs attention', idle: 'Ready' })[phase] || phase;
-  $('stateDetails').textContent = busy ? 'Follow actions on the right. Review any approval prompt.' : 'Open the browser or give another task.';
+  const setupBlocked = window.workModeCloudBlocked === true;
+  $('statusDot').className = 'dot ' + (setupBlocked ? 'error' : busy ? 'running' : phase === 'done' ? 'done' : phase === 'error' ? 'error' : '');
+  $('stateLabel').textContent = setupBlocked ? 'Setup required'
+    : (({ running: 'Working', done: 'Last task finished', stopped: 'Stopped', limited: 'Action limit reached', error: 'Needs attention', idle: 'Ready' })[phase] || phase);
+  $('stateDetails').textContent = setupBlocked
+    ? 'AI and secure browser setup must be completed on Railway. This is not a problem with your computer.'
+    : busy ? 'Follow actions on the right. Review any approval prompt.' : 'Open the browser or give another task.';
 }
 function preview(version, url) {
   if (version <= lastVersion) return;

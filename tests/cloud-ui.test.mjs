@@ -7,6 +7,7 @@ test('cloud app does not auto-open a nonfunctional API-key dialog; shows actual 
   const browser = await chromium.launch({headless:true});
   try {
     const html = await fs.readFile(new URL('../public/index.html',import.meta.url),'utf8');
+    const app = await fs.readFile(new URL('../public/app.js',import.meta.url),'utf8');
     const settings = await fs.readFile(new URL('../public/settings.js',import.meta.url),'utf8');
     const remote = await fs.readFile(new URL('../public/remote.js',import.meta.url),'utf8');
     for (const size of [{width:1366,height:768},{width:390,height:844}]) {
@@ -28,6 +29,7 @@ test('cloud app does not auto-open a nonfunctional API-key dialog; shows actual 
           return {ok:true,json:async()=>body};
         };
       });
+      await page.addScriptTag({content:app});
       await page.addScriptTag({content:settings});
       await page.addScriptTag({content:remote});
       await page.waitForFunction(() =>
@@ -37,6 +39,7 @@ test('cloud app does not auto-open a nonfunctional API-key dialog; shows actual 
         'Cloud UI must not automatically open the API-key dialog');
       assert.equal(await page.locator('#cloudSetupBanner').isVisible(),true);
       assert.equal(await page.locator('#runTask').isDisabled(),true);
+      assert.equal(await page.locator('#stateLabel').textContent(),'Setup required');
       assert.equal(await page.locator('#openBrowser').isDisabled(),true);
       assert.match(await page.locator('#cloudBannerText').textContent(),/not connected/);
       await page.locator('#cloudBannerStatus').click();

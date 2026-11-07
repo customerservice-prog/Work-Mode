@@ -50,6 +50,7 @@ function applyCloudReadiness(state) {
   const canRun = aiReady && browserReady;
   window.workModeCloudBlocked = !canRun;
   window.workModeCloudBrowserBlocked = !browserReady;
+  if (typeof setPhase === 'function') setPhase(window.workModeRunningTask ? 'running' : 'idle');
 
   const issues = [];
   if (!aiReady) issues.push('AI is not connected to Railway');
