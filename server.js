@@ -42,6 +42,26 @@ const eventClients = new Set();
 const localAIBase = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST_OLLAMA_BASEURL ? process.env.WORKMODE_TEST_OLLAMA_BASEURL : undefined;
 let modelPull = null;
 let modelPullState = { running: false, status: 'idle', percent: null, error: null };
+let cloudBrowserTest = { status: CLOUD_MODE ? 'pending' : 'not-applicable' };
+async function verifyCloudBrowserIsolation() {
+  if (!CLOUD_MODE) return;
+  let testBrowser;
+  try {
+    testBrowser = await chromium.launch({
+      headless: true, chromiumSandbox: true, timeout: 25000
+    });
+    const page = await testBrowser.newPage();
+    await page.goto('data:text/html,<title>Work-Mode isolated browser test</title>', {timeout:10000});
+    if ((await page.title()) !== 'Work-Mode isolated browser test') throw Error('Browser test could not load a local page');
+    cloudBrowserTest = { status:'passed' };
+    console.log('Work-Mode isolated Chromium browser startup passed.');
+  } catch(err) {
+    cloudBrowserTest = { status:'failed' };
+    console.error('Work-Mode secure Chromium startup is unavailable:',String(err.message||err).slice(0,500));
+  } finally {
+    await testBrowser?.close().catch(() => {});
+  }
+}
 function allowedIntegrationTestUrl(raw) {
   if (process.env.NODE_ENV !== 'test' || !process.env.WORKMODE_TEST_ORIGIN) return false;
   try { return new URL(raw).origin === process.env.WORKMODE_TEST_ORIGIN; }
@@ -160,6 +180,9 @@ async function launchBrowser() {
 }
 
 async function ensureBrowser() {
+  if (CLOUD_MODE && cloudBrowserTest.status === 'failed') {
+    throw Error('Secure remote browser startup failed on Railway; website AI and browser actions are unavailable until the host sandbox is fixed.');
+  }
   if (!context && !browserLaunch) {
     browserLaunch = launchBrowser().finally(() => { browserLaunch = null; });
   }
@@ -789,6 +812,7 @@ app.get('/api/cloud/readiness', async (_req,res) => {
       volumeAttached:checks.volumeAttached,
       dataDirectoryWritable,
       browserInstalled,
+      browserSandboxStatus:cloudBrowserTest.status,
       warning:'These checks do not prove that storage is persistent, the cloud bill is current, or Chromium isolation is secure.'
     });
   } catch {
@@ -844,6 +868,7 @@ export function startLocalServer(port = PORT) {
     localServer.once('listening', () => {
       console.log('Work-Mode server ready on port ' + localServer.address().port + (CLOUD_MODE ? ' (protected hosted mode)' : ' (local only)'));
       resolve(localServer);
+      if (CLOUD_MODE && process.env.NODE_ENV !== 'test') void verifyCloudBrowserIsolation();
     });
   });
 }

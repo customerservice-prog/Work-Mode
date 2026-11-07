@@ -59,9 +59,12 @@ async function initializeRemote() {
         if (!state.aiConfigured) missing.push('AI connection');
         if (!state.dataDirectoryConfigured || !state.dataDirectoryWritable) missing.push('persistent storage configuration');
         if (!state.browserInstalled) missing.push('browser installation');
+        if (state.browserSandboxStatus === 'failed') missing.push('secure browser startup on the host');
         $r('cloudStatus').textContent = missing.length
           ? 'Workspace setup incomplete: ' + missing.join(', ') + '.'
-          : 'Basic workspace checks passed. Browser security and hosting availability still need real-world verification.';
+          : state.browserSandboxStatus === 'passed'
+            ? 'Secure browser startup passed. Your private workspace is available; AI needs a provider connection if not yet configured.'
+            : 'Browser sandbox test in progress. You may need to refresh this page to see the result.';
       }
     } catch {
       $r('cloudStatus').textContent='Could not check the private workspace configuration.';
