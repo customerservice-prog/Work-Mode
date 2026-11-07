@@ -65,17 +65,17 @@ test('hosted self-managed model completes browser tool loop with checkpoints and
     const login=await request('/api/auth/login','POST',{password:'test-password-for-browser-integration'});
     assert.equal(login.status,200);
     const cookie=login.headers.get('set-cookie').split(';')[0];
-    const settings=await (await request('/api/settings','GET',null,cookie)).json();
+    const settings=await (await request('/api/settings','GET',undefined,cookie)).json();
     assert.equal(settings.aiBackend,'compatible');
     assert.equal(settings.hasApiKey,true);
     assert.equal(JSON.stringify(settings).includes('WORKMODE_AI_BASE_URL'),false);
-    const readiness=await (await request('/api/cloud/readiness','GET',null,cookie)).json();
+    const readiness=await (await request('/api/cloud/readiness','GET',undefined,cookie)).json();
     assert.equal(readiness.aiConfigured,true);
     const run=await request('/api/tasks','POST',{task:'Open test page and verify the page title'},cookie);
     assert.equal(run.status,200,await run.text().catch(()=>''));
     let state;
     for(let i=0;i<120;i++){
-      state=await (await request('/api/status','GET',null,cookie)).json();
+      state=await (await request('/api/status','GET',undefined,cookie)).json();
       if(!state.busy && state.task)break;
       await new Promise(r=>setTimeout(r,180));
     }
@@ -84,7 +84,7 @@ test('hosted self-managed model completes browser tool loop with checkpoints and
     assert.equal(calls,3);
     assert.equal(containsTools,true);
     assert.equal(stateless,true);
-    const journal=await (await request('/api/task-journal','GET',null,cookie)).json();
+    const journal=await (await request('/api/task-journal','GET',undefined,cookie)).json();
     assert.equal(journal.tasks[0].phase,'done');
     const encrypted=await fs.readFile(path.join(data,'task-checkpoints.enc'),'utf8');
     assert.equal(encrypted.includes('Open test page'),false);
