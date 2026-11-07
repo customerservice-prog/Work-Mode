@@ -1,5 +1,12 @@
 # Work-Mode — Browser Agent (Cloud Beta)
 
+## Control your existing Edge tabs (no paid browser API)
+
+The optional [Edge Tab Connector](extension/README.md) can control **one specifically approved tab** in the user's existing Microsoft Edge window. Supported actions include inspecting visible controls, clicking, typing non-secret text, scrolling, navigation on the same approved origin, and verifying page text. A specific Facebook group post can be prepared and sent with explicit confirmation and feed verification. This is a deterministic browser controller: no generic autonomous natural-language AI is included.
+
+The extension requires manual installation in Edge and a one-time permission grant for each website. It does **not** borrow browser cookies or passwords from the Railway Chromium browser. The automated Facebook test uses a simulated page; the real Facebook post has not been verified until the owner connects the extension on the live site.
+
+
 **Status: beta, not a complete replacement for ChatGPT Work.** The hosted version is accessible at https://work-mode-production.up.railway.app/ and runs on Railway. The Windows offline Lite v0.5.0 installer remains separate and unchanged.
 
 ## Features implemented
