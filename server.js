@@ -994,7 +994,8 @@ app.get('/api/events', (req, res) => {
   res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   res.flushHeaders();
   eventClients.add(res);
-  res.write('data: ' + JSON.stringify({ type: 'status', phase: SESSION.phase, answer: SESSION.answer }) + '\n\n');
+  res.write('data: ' + JSON.stringify({type:'status',phase:SESSION.phase,answer:SESSION.answer,
+    recoveredTask:recoveredJob && {id:recoveredJob.id,task:recoveredJob.task,steps:recoveredJob.steps,answer:recoveredJob.answer}}) + '\n\n');
   req.on('close', () => eventClients.delete(res));
 });
 app.post('/api/browser/open', async (_req, res) => {
