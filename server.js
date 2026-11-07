@@ -388,7 +388,7 @@ async function runTask(task) {
   try {
     // Simple navigation works without starting any AI model. This keeps
     // first-run tests usable even on very small Windows PCs.
-    const quickOpen = /^(?:open|visit|go to|navigate to)s+(https?://[^s]+?)(?:s+(?:ands+)?(?:tell me (?:its|the) (?:page )?title|show the page))?.?$/i.exec(task);
+    const quickOpen = /^(?:open|visit|go to|navigate to)\s+(https?:\/\/[^\s]+?)(?:\s+(?:and\s+)?(?:tell me (?:its|the) (?:page )?title|show the page))?\.?$/i.exec(task);
     if (quickOpen) {
       const url = await validateBrowserUrl(quickOpen[1]);
       await executeTool('navigate',{url});
