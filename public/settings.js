@@ -61,6 +61,7 @@ async function openAISettings() {
   try {
     const config = await settingsRequest('/api/settings');
     hostedSettings = Boolean(config.cloud);
+    settingsEl('cloudPasswordForm').hidden = !hostedSettings;
     const dialog = settingsEl('settingsDialog');
     dialog.classList.toggle('hosted-settings', hostedSettings);
     settingsEl('settingsHeading').textContent = hostedSettings ? 'Cloud setup status' : 'Choose your AI';
@@ -187,3 +188,30 @@ void (async () => {
     }
   } catch {}
 })();
+
+
+settingsEl('cloudPasswordForm').addEventListener('submit', async event => {
+  event.preventDefault();
+  const submit=settingsEl('cloudChangePassword');
+  if (submit.disabled || !hostedSettings) return;
+  const message=settingsEl('cloudPasswordMessage');
+  const current=settingsEl('cloudCurrentPassword').value;
+  const password=settingsEl('cloudNewPassword').value;
+  if (password.length<20 || password.length>200 || current===password) {
+    message.textContent='Choose a different password between 20 and 200 characters.';
+    return;
+  }
+  submit.disabled=true;
+  message.textContent='Saving new access password…';
+  try {
+    await settingsRequest('/api/auth/change-password',{currentPassword:current,newPassword:password});
+    message.textContent='Password changed. All sessions are signed out. Sign in with your new password.';
+    settingsEl('cloudCurrentPassword').value='';
+    settingsEl('cloudNewPassword').value='';
+    window.location.assign('/login');
+  } catch (err) {
+    message.textContent=err.message;
+    settingsEl('cloudCurrentPassword').value='';
+    settingsEl('cloudNewPassword').value='';
+  } finally { submit.disabled=false; }
+});
