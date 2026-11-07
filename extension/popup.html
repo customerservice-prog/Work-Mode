@@ -1,0 +1,10 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>body{font:13px system-ui,sans-serif;width:310px;min-height:150px;padding:15px;margin:0;color:#e7eafb;background:#151c29}
+h1{font-size:17px;margin:0 0 8px}p{line-height:1.5;color:#c1cada}button{background:#bde1ff;color:#152136;border:0;border-radius:8px;padding:11px;font-weight:700;cursor:pointer;width:100%;margin-top:10px}button:disabled{opacity:.5}#tab{overflow-wrap:anywhere;color:#fff;font-weight:600}.small{font-size:11px}a{color:#bde1ff}</style></head><body>
+<h1>Work-Mode · Edge tabs</h1>
+<p>Open a website tab (such as Facebook), then click this extension to choose that tab for Work-Mode. Only one tab is connected at a time.</p>
+<p id="tab">Reading the current Edge tab…</p>
+<button id="connect" disabled>Allow Work-Mode to use this tab</button>
+<p id="result" role="status"></p>
+<p class="small">Permission is requested for this website only. Passwords and security codes must be entered in the real Edge tab. Publishing and other consequential actions require review.</p>
+<script src="policy.js"></script><script src="popup.js"></script></body></html>
