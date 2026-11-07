@@ -16,6 +16,7 @@ import { cloudRequirements, assertCloudRequirements } from './lib/cloud-config.j
 import { createTokenBudget } from './lib/cloud-budget.js';
 import { parseBasicCommand, BASIC_HELP } from './lib/basic-commands.js';
 import { hostedAI } from './lib/hosted-ai.js';
+import { createTaskJournal } from './lib/task-journal.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
@@ -40,6 +41,10 @@ const BROWSER_DIR = process.env.NODE_ENV === 'test' && process.env.WORKMODE_TEST
   ? path.resolve(process.env.WORKMODE_TEST_PROFILE)
   : path.join(DATA_ROOT, 'browser-profile');
 const cloudBudget = CLOUD_MODE ? createTokenBudget({ directory: DATA_ROOT }) : null;
+const taskJournal = CLOUD_MODE ? createTaskJournal({directory: DATA_ROOT, secret:process.env.WORKMODE_SESSION_SECRET}) : null;
+let activeJobId = null;
+let recoveredJob = null;
+let taskReservation = false;
 const HIGH_IMPACT = /\b(pay|purchase|buy|checkout|order|charge|refund|transfer|withdraw|delete|remove|release|unassign|assign|publish|post|send|submit|save|update|confirm|subscribe|cancel|sign|invite|archive|disable|close account|accept|agree|authorize)\b/i;
 const SESSION = { busy: false, phase: 'idle', task: '', answer: '', logs: [], imageVersion: 0, approval: null, steps: 0, startedAt: '' };
 let context = null;
@@ -125,9 +130,18 @@ function notify(type, data = {}) {
     try { client.write(message); } catch { eventClients.delete(client); }
   }
 }
-function log(text) { notify('log', { message: redactForLog(text).slice(0, 1000) }); }
+function log(text) {
+  const message=redactForLog(text).slice(0,1000);
+  notify('log', {message});
+  if (taskJournal && activeJobId) {
+    void taskJournal.update(activeJobId,{steps:SESSION.steps,lastAction:message})
+      .catch(err=>console.error('Task checkpoint update failed:',String(err.message||err).slice(0,120)));
+  }
+}
 function exposeState() {
-  return { ...SESSION, browserUrl: activePage && !activePage.isClosed() ? activePage.url() : null, hasBrowser: Boolean(context) };
+  return { ...SESSION, recoveredTask: recoveredJob && {id:recoveredJob.id,task:recoveredJob.task,
+    steps:recoveredJob.steps,answer:recoveredJob.answer},
+    browserUrl: activePage && !activePage.isClosed() ? activePage.url() : null, hasBrowser: Boolean(context) };
 }
 function attachPage(page) {
   activePage = page;
@@ -594,7 +608,8 @@ async function runBasicBrowserCommand(input) {
   SESSION.phase = 'done';
 }
 
-async function runTask(task) {
+async function runTask(task,jobId=null) {
+  activeJobId=jobId;
   SESSION.busy = true;
   SESSION.steps = 0;
   SESSION.startedAt = new Date().toISOString();
@@ -713,6 +728,15 @@ async function runTask(task) {
     try { await recordTask({ task, phase: SESSION.phase, answer: SESSION.answer,
       steps: SESSION.steps, startedAt: SESSION.startedAt, actions: SESSION.logs }); }
     catch (err) { log('Could not save local history: ' + String(err.message || err)); }
+    if (taskJournal && jobId) {
+      try { await taskJournal.update(jobId,{phase:SESSION.phase,steps:SESSION.steps,
+        answer:SESSION.answer,finishedAt:new Date().toISOString()}); }
+      catch {
+        SESSION.phase='error';
+        SESSION.answer='Task results could not be saved safely. Review the browser before repeating any action.';
+      }
+    }
+    activeJobId=null;
     SESSION.busy = false;
     if (pending) pending.resolve(false);
     notify('status', { phase: SESSION.phase, answer: SESSION.answer });
@@ -964,14 +988,29 @@ app.post('/api/browser/open', async (_req, res) => {
     res.json({ ok: true, url: page.url() });
   } catch (err) { res.status(500).json({ error: String(err.message || err) }); }
 });
-app.post('/api/tasks', (req, res) => {
+app.get('/api/task-journal', async (_req,res) => {
+  if (!taskJournal) return res.status(404).json({error:'Task journal is available only in hosted mode'});
+  try {
+    const items=await taskJournal.list();
+    res.json({tasks:items.map(x=>({id:x.id,task:x.task,phase:x.phase,steps:x.steps,
+      answer:x.answer,startedAt:x.startedAt,updatedAt:x.updatedAt}))});
+  } catch {res.status(503).json({error:'Could not read encrypted task checkpoints'});}
+});
+app.post('/api/tasks', async (req, res) => {
   if (modelPull) return res.status(409).json({ error: 'The local AI model is downloading. Finish or cancel the download before running a task.' });
   const task = String(req.body?.task || '').trim();
-  if (SESSION.busy) return res.status(409).json({ error: 'A task is already running' });
+  if (SESSION.busy || taskReservation) return res.status(409).json({ error: 'A task is already running' });
   if (!task || task.length > 3000) return res.status(400).json({ error: 'Enter a task up to 3000 characters' });
-  log('New task requested');
-  void runTask(task);
-  res.json({ ok: true });
+  taskReservation=true;
+  try {
+    const journalItem=taskJournal ? await taskJournal.begin(task) : null;
+    recoveredJob=null;
+    log('New task requested');
+    void runTask(task,journalItem?.id||null);
+    res.json({ok:true,taskId:journalItem?.id||null});
+  } catch {
+    res.status(503).json({error:'Cannot save a protected task checkpoint; task was not started'});
+  } finally {taskReservation=false;}
 });
 app.post('/api/approvals/:id', (req, res) => {
   if (!pending || pending.id !== req.params.id) return res.status(404).json({ error: 'No matching pending approval' });
@@ -985,10 +1024,13 @@ app.post('/api/stop', (_req, res) => {
   log('Stop requested by user');
   res.json({ ok: true });
 });
-export function startLocalServer(port = PORT) {
+export async function startLocalServer(port = PORT) {
+  assertCloudRequirements(process.env);
+  if (taskJournal) {
+    const interrupted=await taskJournal.recover();
+    recoveredJob=interrupted[0]||null;
+  }
   return new Promise((resolve, reject) => {
-    try { assertCloudRequirements(process.env); }
-    catch(err) { reject(err); return; }
     const localServer = app.listen(port, CLOUD_MODE ? '0.0.0.0' : '127.0.0.1');
     localServer.once('error', reject);
     localServer.once('listening', () => {
