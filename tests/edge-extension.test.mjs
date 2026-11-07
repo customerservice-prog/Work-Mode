@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import {execFileSync} from 'node:child_process';
-import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 
 const root=new URL('../',import.meta.url);
 const rel=file=>new URL(file,root);
@@ -24,7 +24,7 @@ test('Edge extension is Manifest V3, opt-in per-site and does not require an AI 
   assert.match(bridge,/event\.origin!==ORIGIN/);
   for(const file of ['extension/background.js','extension/bridge.js','extension/policy.js','extension/popup.js',
       'public/edge-tabs.js','public/edge-facebook.js']){
-    assert.doesNotThrow(()=>execFileSync(process.execPath,['--check',String(rel(file))]),file+' must parse');
+    assert.doesNotThrow(()=>execFileSync(process.execPath,['--check',fileURLToPath(rel(file))]),file+' must parse');
   }
 });
 test('extension forbids internal addresses, secret fields and silent publish clicks',async()=>{
