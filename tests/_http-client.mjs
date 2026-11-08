@@ -27,6 +27,7 @@ export function requestWithHost(base, endpoint, options = {}) {
             return Array.isArray(value)?value[0]:value ?? null;
           }},
           text:async()=>bytes.toString(),
+          arrayBuffer:async()=>bytes.buffer.slice(bytes.byteOffset,bytes.byteOffset+bytes.byteLength),
           json:async()=>JSON.parse(bytes.toString())
         });
       });
