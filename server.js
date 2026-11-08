@@ -17,6 +17,7 @@ import { createTokenBudget } from './lib/cloud-budget.js';
 import { parseBasicCommand, BASIC_HELP } from './lib/basic-commands.js';
 import { hostedAI } from './lib/hosted-ai.js';
 import { createTaskJournal } from './lib/task-journal.js';
+import { makeEdgeExtensionZip } from './lib/extension-download.js';
 
 const app = express();
 const CLOUD_MODE = process.env.WORKMODE_CLOUD_MODE === '1';
@@ -113,6 +114,21 @@ if (CLOUD_MODE) app.use((_req, res, next) => {
   res.set('Permissions-Policy','camera=(), microphone=(), geolocation=()');
   res.set('Strict-Transport-Security','max-age=31536000');
   next();
+});
+// Public extension download. No account secrets, user data, or API access are included.
+// Serve directly from Railway so a failed ChatGPT attachment link cannot block setup.
+app.get('/downloads/work-mode-edge-connector.zip', async (_req,res) => {
+  try {
+    const bytes=await makeEdgeExtensionZip();
+    res.set('Content-Type','application/zip');
+    res.set('Content-Disposition','attachment; filename="Work-Mode-Edge-Connector.zip"');
+    res.set('Content-Length',String(bytes.length));
+    res.set('Cache-Control','no-store');
+    res.send(bytes);
+  } catch (err) {
+    console.error('Edge extension download unavailable:',String(err.message||err).slice(0,180));
+    res.status(503).json({error:'Could not create Edge extension package'});
+  }
 });
 app.use(hostedSecurity.middleware);
 app.get('/login', (_req,res) => {
